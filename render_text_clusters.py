@@ -23,7 +23,7 @@ from ezdxf import recover
 from dxf_render import (
     analyze_dxf, auto_detect_color_policy, suggest_region_size,
     suggest_lineweight, build_config,
-    collect_text_positions, find_top_clusters,
+    collect_text_positions, find_top_clusters, find_dominant_text_layer,
     clean_mtext_preview, render_region,
 )
 

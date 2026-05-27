@@ -169,7 +169,17 @@ class DXFInfo:
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def collect_text_positions(msp) -> list[TextPos]:
+def find_dominant_text_layer(msp) -> str | None:
+    """Retorna o nome da layer com mais entidades TEXT/MTEXT."""
+    counts: dict[str, int] = {}
+    for e in msp:
+        if e.dxftype() in ("TEXT", "MTEXT"):
+            layer = e.dxf.get("layer", "0")
+            counts[layer] = counts.get(layer, 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def collect_text_positions(msp, layer: str | None = None) -> list[TextPos]:
     """Extrai posições e conteúdos de todas as entidades TEXT/MTEXT.
 
     Itera o modelspace e coleta o ponto de inserção e o texto cru de cada
@@ -178,6 +188,7 @@ def collect_text_positions(msp) -> list[TextPos]:
 
     Args:
         msp: Modelspace do DXF (resultado de ``doc.modelspace()``).
+        layer: Se fornecido, filtra apenas entidades desta layer.
 
     Returns:
         Lista de :class:`TextPos`. Vazia se o DXF não tiver textos.
@@ -191,6 +202,8 @@ def collect_text_positions(msp) -> list[TextPos]:
     for e in msp:
         et = e.dxftype()
         if et not in ("TEXT", "MTEXT"):
+            continue
+        if layer is not None and e.dxf.get("layer", "0") != layer:
             continue
         try:
             p = e.dxf.insert
@@ -301,7 +314,11 @@ def find_top_clusters(
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def filter_entities_by_bbox(msp, region: tuple[float, float, float, float]):
+def filter_entities_by_bbox(
+    msp,
+    region: tuple[float, float, float, float],
+    layer: str | None = None,
+):
     """Retorna apenas as entidades cuja bbox intersecta a região.
 
     Usa ``ezdxf.bbox.extents(..., fast=True)``, que conhece *todos* os
@@ -317,6 +334,7 @@ def filter_entities_by_bbox(msp, region: tuple[float, float, float, float]):
     Args:
         msp: Modelspace do DXF.
         region: ``(xmin, ymin, xmax, ymax)`` em unidades DXF.
+        layer: Se fornecido, inclui apenas entidades desta layer.
 
     Returns:
         Lista de entidades DXF cuja bounding box intersecta ``region``.
@@ -329,6 +347,8 @@ def filter_entities_by_bbox(msp, region: tuple[float, float, float, float]):
     cache = bbox.Cache()
     keep = []
     for e in msp:
+        if layer is not None and e.dxf.get("layer", "0") != layer:
+            continue
         try:
             b = bbox.extents([e], fast=True, cache=cache)
             if b.has_data:
@@ -556,6 +576,7 @@ def render_region(
     dpi: int = 200,
     config: Configuration | None = None,
     bg_color: str = "#ffffff",
+    layer: str | None = None,
     verbose: bool = True,
 ) -> bool:
     """Renderiza uma região quadrada do DXF como PNG em alta qualidade.
@@ -597,7 +618,7 @@ def render_region(
     if verbose:
         print(f"    filtrando…", end=" ", flush=True)
     t0 = time.time()
-    entidades = filter_entities_by_bbox(doc.modelspace(), region)
+    entidades = filter_entities_by_bbox(doc.modelspace(), region, layer=layer)
     if verbose:
         print(f"{len(entidades)} entidades ({time.time()-t0:.1f}s)")
 
