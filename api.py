@@ -14,7 +14,7 @@ import tempfile
 import zipfile
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 from ezdxf import recover
 
@@ -729,36 +729,16 @@ async def diagnose_endpoint(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Endpoint 5 — Render de clusters a partir de strings livres
+# Endpoint 5 — Render de clusters PSCIP (keywords fixas)
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-def _tokens_from_text(raw: str, min_len: int = 4) -> set[str]:
-    """Tokeniza um bloco de texto livre (uma string por linha)."""
-    tokens: set[str] = set()
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if len(line) >= min_len:
-            tokens.add(line.upper())
-        for tok in re.split(r"[\s,;/\\]+", line):
-            tok = tok.strip()
-            if len(tok) >= min_len:
-                tokens.add(tok.upper())
-    return tokens
 
 
 @app.post(
     "/render-clusters-strings",
-    summary="Busca strings no DXF, renderiza os clusters e retorna um ZIP",
+    summary="Renderiza clusters PSCIP usando keywords fixas (RT, CREA, Extintor, etc.)",
 )
 async def render_clusters_strings_endpoint(
     dxf: Annotated[UploadFile, File(description="Arquivo DXF")],
-    strings: Annotated[
-        str,
-        Form(description="Valores a buscar no DXF — um por linha"),
-    ],
     n: Annotated[
         int,
         Query(ge=1, le=20, description="Quantidade de clusters a renderizar"),
@@ -767,9 +747,9 @@ async def render_clusters_strings_endpoint(
     dxf_path = _load_dxf_to_tmp(dxf)
 
     try:
-        tokens = _tokens_from_text(strings)
-        if not tokens:
-            raise HTTPException(status_code=422, detail="Nenhuma string válida fornecida.")
+        # Usa o mesmo conjunto de keywords PSCIP do scoring de /top-clusters.
+        # Já em UPPERCASE — _collect_csv_matches faz upper() no texto do DXF.
+        tokens = {kw.upper() for kw in _KEYWORDS_HIGH_VALUE}
 
         doc, _ = recover.readfile(dxf_path)
         msp = doc.modelspace()
@@ -779,7 +759,7 @@ async def render_clusters_strings_endpoint(
         matches = _collect_csv_matches(msp, tokens)
         if not matches:
             raise HTTPException(status_code=404,
-                                detail="Nenhum texto do DXF corresponde às strings fornecidas.")
+                                detail="Nenhum texto do DXF corresponde às keywords PSCIP.")
 
         info = analyze_dxf(doc)
         qualidade, _ = _detect_quality(info, matches)
