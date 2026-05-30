@@ -18,7 +18,8 @@ services:
       # uvicorn
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
     env_file:
-      - .env
+      - path: .env
+        required: false   # .env é opcional — vars obrigatórias vêm de environment: acima
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs').read()"]
       interval: 30s
