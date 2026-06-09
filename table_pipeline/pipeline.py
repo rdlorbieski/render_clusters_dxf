@@ -1,5 +1,13 @@
 """
-pipeline.py — orquestra os 6 passos da extração de tabelas.
+pipeline.py — orquestração da extração de tabelas PSCIP.
+
+Fluxo (ver run_pipeline + render_tables):
+    PASSO 1 — Avaliar a qualidade do DXF        (aborta se baixa)
+    PASSO 2 — Medir a escala do texto           (resolução do grid)
+    PASSO 3 — Detectar tabelas                  (grade conectada + keywords)
+    PASSO 4 — Registrar o resultado no log
+    PASSO 5 — Renderizar em alta resolução      (render_tables)
+    PASSO 6 — Empacotar (ZIP / salvar)          (no router/script)
 
 Reusa funções de api.py e dxf_render.py via import tardio (dentro das
 funções) para evitar import circular — o router deste módulo é incluído
@@ -14,6 +22,7 @@ from .geometry import (
     collect_segments, collect_text_boxes, TextBox,
     build_occupancy, find_components, component_bbox,
 )
+from .exceptions import LowQualityDXFError
 
 _log = logging.getLogger("table_pipeline")
 
@@ -44,10 +53,13 @@ class Table:
 
 @dataclass
 class PipelineResult:
-    """Resultado completo do pipeline."""
+    """Resultado de uma detecção bem-sucedida (passos 1–4).
+
+    Qualidade baixa não produz um PipelineResult — lança LowQualityDXFError.
+    `tables` pode vir vazia se nenhuma região tiver keywords PSCIP.
+    """
     qualidade: str
     motivo: str
-    aborted: bool                 # True se parou por qualidade baixa
     tables: list[Table] = field(default_factory=list)
     text_height: float = 0.0
     cell: float = 0.0
@@ -55,8 +67,13 @@ class PipelineResult:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Passos 2–4: detecção geométrica de tabelas com keywords
+# PASSO 3 — Detecção geométrica de tabelas (grade conectada + keywords)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Mínimo de textos com keyword para uma região contar como tabela.
+# Descarta falsos positivos de keyword isolada (ex.: "ÁREA VERDE" solto gera
+# um componente minúsculo que não é uma tabela real).
+_MIN_KEYWORDS_PER_TABLE = 2
 
 
 def _seed_keywords(text_boxes: list[TextBox]) -> list[tuple[TextBox, float]]:
@@ -163,6 +180,9 @@ def detect_tables(
 
             # Pontua a tabela: soma score de TODOS os textos dentro do bbox
             table = _score_table(bbox, text_boxes)
+            # Descarta keyword isolada (provável falso positivo)
+            if table.keyword_count < _MIN_KEYWORDS_PER_TABLE:
+                continue
             tables.append(table)
 
     tables.sort(key=lambda t: t.score, reverse=True)
@@ -229,7 +249,54 @@ def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Passo 1 + orquestração
+# PASSO 1 — Avaliar a qualidade do DXF
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _avaliar_qualidade(doc, msp) -> tuple[str, str]:
+    """Classifica o DXF em alta/media/baixa. Retorna (qualidade, motivo)."""
+    from api import _detect_quality
+    from dxf_render import analyze_dxf, collect_text_positions
+    info = analyze_dxf(doc)
+    positions = collect_text_positions(msp, layer=None)
+    return _detect_quality(info, positions)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PASSO 2 — Medir a escala do texto (base para a resolução do grid)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _medir_escala_texto(msp) -> float:
+    """Altura típica do texto de corpo (unidades DXF). Nunca zero."""
+    from api import _text_height_dxf
+    return _text_height_dxf(msp) or 1.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PASSO 4 — Registrar o resultado no log do uvicorn
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables, n):
+    """Loga qualidade, parâmetros do grid e as tabelas detectadas."""
+    _log.warning("─" * 70)
+    _log.warning("[table_pipeline] QUALIDADE=%s", qualidade.upper())
+    _log.warning("[table_pipeline] motivo: %s", motivo)
+    _log.warning("[table_pipeline] text_height=%.2f cell=%.2f gap_cells=%d tabelas=%d",
+                 text_height, cell, gap_cells, len(tables))
+    for i, t in enumerate(tables[:n], 1):
+        _log.warning(
+            "  tabela %d: score=%.0f kw=%d textos=%d txt_h=%.2f "
+            "bbox=(%.0f,%.0f)-(%.0f,%.0f) %.0fx%.0f  kws=%s",
+            i, t.score, t.keyword_count, t.text_count, t.text_height,
+            t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3],
+            t.width, t.height, ", ".join(t.keywords[:4]))
+    _log.warning("─" * 70)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Orquestração — PASSOS 1 → 4
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -242,55 +309,46 @@ def run_pipeline(
     roi_margin_factor: float = 60.0,
     group_factor: float = 25.0,
 ) -> PipelineResult:
-    """Executa passos 1–5 (detecção + score + log). Render fica no router."""
-    from api import _detect_quality, _text_height_dxf
-    from dxf_render import analyze_dxf, collect_text_positions
+    """Detecta as tabelas PSCIP de um documento DXF (passos 1 a 4).
 
+    A renderização em alta resolução (passo 5) fica em ``render_tables``,
+    chamada depois que o consumidor decide extrair.
+
+    Raises:
+        LowQualityDXFError: DXF de qualidade baixa — extração não compensa.
+
+    Returns:
+        PipelineResult com as tabelas detectadas (lista pode vir vazia se
+        nenhuma região tiver keywords PSCIP).
+    """
     msp = doc.modelspace()
-    info = analyze_dxf(doc)
-    positions = collect_text_positions(msp, layer=None)
 
-    # Passo 1 — qualidade
-    qualidade, motivo = _detect_quality(info, positions)
-    _log.warning("─" * 70)
-    _log.warning("[table_pipeline] QUALIDADE=%s", qualidade.upper())
-    _log.warning("[table_pipeline] motivo: %s", motivo)
-
+    # ═══ PASSO 1 — Avaliar a qualidade do DXF ═══
+    qualidade, motivo = _avaliar_qualidade(doc, msp)
     if qualidade == "baixa":
-        _log.warning("[table_pipeline] qualidade baixa → abortando.")
-        _log.warning("─" * 70)
-        return PipelineResult(qualidade=qualidade, motivo=motivo, aborted=True)
+        _log.warning("[table_pipeline] qualidade BAIXA → abortando: %s", motivo)
+        raise LowQualityDXFError(qualidade, motivo)
 
-    # Escala base: altura típica do texto
-    text_height = _text_height_dxf(msp) or 1.0
-    _log.warning("[table_pipeline] text_height=%.2f  (escala base)", text_height)
+    # ═══ PASSO 2 — Medir a escala do texto ═══
+    text_height = _medir_escala_texto(msp)
 
-    # Passos 2–4 — detecção geométrica + score
+    # ═══ PASSO 3 — Detectar tabelas (grade conectada + score por keywords) ═══
     tables, cell, gap_cells = detect_tables(
         msp, text_height,
         cell_factor=cell_factor, gap_factor=gap_factor,
         roi_margin_factor=roi_margin_factor, group_factor=group_factor)
 
-    # Passo 5 — log dos clusters/tabelas
-    _log.warning("[table_pipeline] cell=%.2f  gap_cells=%d  tabelas=%d",
-                 cell, gap_cells, len(tables))
-    for i, t in enumerate(tables[:n], 1):
-        _log.warning(
-            "  tabela %d: score=%.0f kw=%d textos=%d txt_h=%.2f "
-            "bbox=(%.0f,%.0f)-(%.0f,%.0f) %.0fx%.0f  kws=%s",
-            i, t.score, t.keyword_count, t.text_count, t.text_height,
-            t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3],
-            t.width, t.height, ", ".join(t.keywords[:4]))
-    _log.warning("─" * 70)
+    # ═══ PASSO 4 — Registrar no log ═══
+    _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables, n)
 
     return PipelineResult(
-        qualidade=qualidade, motivo=motivo, aborted=False,
+        qualidade=qualidade, motivo=motivo,
         tables=tables[:n], text_height=text_height,
         cell=cell, gap_cells=gap_cells)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Passo 6 — render das tabelas em alta resolução (compartilhado endpoint/script)
+# PASSO 5 — Render das tabelas em alta resolução (compartilhado endpoint/script)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Altura-alvo do texto no PNG final (px) para um LLM ler com folga.

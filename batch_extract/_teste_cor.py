@@ -49,12 +49,14 @@ def _load(path):
 
 
 def _processa(path, tag):
+    from table_pipeline.exceptions import LowQualityDXFError
     print(f"\n=== {tag} ===")
     doc, tmp = _load(path)
     try:
-        result = run_pipeline(doc, n=5)
-        if result.aborted:
-            print(f"  qualidade baixa: {result.motivo[:60]}")
+        try:
+            result = run_pipeline(doc, n=5)
+        except LowQualityDXFError as e:
+            print(f"  qualidade baixa: {e.motivo[:60]}")
             return
         rendered = render_tables(doc, result)   # já usa ColorPolicy.BLACK
         outdir = OUT / tag; outdir.mkdir(exist_ok=True)

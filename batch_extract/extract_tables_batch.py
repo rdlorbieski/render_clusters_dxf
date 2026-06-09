@@ -36,6 +36,7 @@ from ezdxf import recover
 
 from converter import convert_dwg_to_dxf
 from table_pipeline.pipeline import run_pipeline, render_tables
+from table_pipeline.exceptions import LowQualityDXFError
 
 # UTF-8 no stdout (acentos no console do Windows)
 try:
@@ -128,22 +129,16 @@ def _process(path: Path) -> None:
 
         doc, _ = recover.readfile(dxf_path)
 
-        # Passos 1–5 (qualidade, detecção, score, log no console)
+        # PASSOS 1–4 (qualidade, escala, detecção, log no console)
         result = run_pipeline(
             doc, n=N_TABELAS, cell_factor=CELL_FACTOR, gap_factor=GAP_FACTOR,
             roi_margin_factor=ROI_MARGIN_FACTOR, group_factor=GROUP_FACTOR)
-
-        if result.aborted:
-            print(f"  ⚠️  Qualidade BAIXA — pulando. Motivo:\n     {result.motivo}")
-            (outdir / "_qualidade_baixa.txt").write_text(
-                result.motivo, encoding="utf-8")
-            return
 
         if not result.tables:
             print("  Nenhuma tabela com keywords PSCIP localizada.")
             return
 
-        # Passo 6 — render em alta resolução (lógica idêntica ao endpoint)
+        # PASSO 5 — render em alta resolução (lógica idêntica ao endpoint)
         rendered = render_tables(doc, result)
         if not rendered:
             print("  Tabelas detectadas, mas nenhuma pôde ser renderizada.")
@@ -177,6 +172,10 @@ def _process(path: Path) -> None:
 
         print(f"  ✅ {len(manifest)} tabela(s) salva(s) em: {outdir}")
 
+    except LowQualityDXFError as e:
+        # PASSO 1 abortou: qualidade baixa não é erro — registra e segue.
+        print(f"  ⚠️  Qualidade BAIXA — pulando. Motivo:\n     {e.motivo}")
+        (outdir / "_qualidade_baixa.txt").write_text(e.motivo, encoding="utf-8")
     except Exception as exc:
         import traceback
         print(f"  ❌ ERRO: {exc}")
