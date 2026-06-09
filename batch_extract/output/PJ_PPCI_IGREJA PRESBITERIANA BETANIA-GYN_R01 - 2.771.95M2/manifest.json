@@ -1,0 +1,128 @@
+{
+  "arquivo": "PJ_PPCI_IGREJA PRESBITERIANA BETANIA-GYN_R01 - 2.771.95M2.dwg",
+  "qualidade_dwg": "alta",
+  "motivo": "Arquivo bem estruturado: planta com proporção 1.0:1 (regular) e 1338 textos identificados. Localização de quadros, carimbos e informações de PSCIP deve ser precisa.",
+  "text_height_global": 0.17,
+  "tabelas": [
+    {
+      "file": "tabela_01_score631_kw20.png",
+      "score": 631.0,
+      "keyword_count": 20,
+      "text_count": 266,
+      "text_height": 0.182,
+      "dpi": 8684,
+      "bbox": {
+        "x_min": 1146.89,
+        "y_min": 600.0,
+        "x_max": 1249.74,
+        "y_max": 652.3
+      },
+      "keywords": [
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "\\A1;As paredes das caixas de escadas, da",
+        "\\pxql;As escadas devem ter os pisos com ",
+        "Guarda Corpo em material incombustível  "
+      ]
+    },
+    {
+      "file": "tabela_02_score431_kw10.png",
+      "score": 431.0,
+      "keyword_count": 10,
+      "text_count": 211,
+      "text_height": 0.182,
+      "dpi": 8684,
+      "bbox": {
+        "x_min": 1146.7,
+        "y_min": 532.67,
+        "x_max": 1247.59,
+        "y_max": 583.21
+      },
+      "keywords": [
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "\\A1;As paredes das caixas de escadas, da",
+        "\\pxql;As escadas devem ter os pisos com ",
+        "Guarda Corpo em material incombustível  "
+      ]
+    },
+    {
+      "file": "tabela_03_score398_kw9.png",
+      "score": 398.0,
+      "keyword_count": 9,
+      "text_count": 23,
+      "text_height": 0.532,
+      "dpi": 2977,
+      "bbox": {
+        "x_min": 879.94,
+        "y_min": 589.85,
+        "x_max": 916.24,
+        "y_max": 616.39
+      },
+      "keywords": [
+        "CONFORME NORMA TÉCNICA NT 11",
+        "ÁREA DE RISCO",
+        "EDIFICAÇÃO E/OU",
+        "CONFORME NORMA TÉCNICA NT 06",
+        "CONFORME NORMA TÉCNICA NT 20",
+        "CONFORME NORMA TÉCNICA NT 17",
+        "CONFORME NORMA TÉCNICA NT 08",
+        "CONFORME NORMA TÉCNICA NT 40"
+      ]
+    },
+    {
+      "file": "tabela_04_score348_kw11.png",
+      "score": 348.0,
+      "keyword_count": 11,
+      "text_count": 113,
+      "text_height": 0.2,
+      "dpi": 7920,
+      "bbox": {
+        "x_min": 1115.87,
+        "y_min": 481.35,
+        "x_max": 1247.39,
+        "y_max": 522.53
+      },
+      "keywords": [
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "{\\fArial|b0|i0|c0|p34;ÁREA VERDE",
+        "\\A1;Guarda-corpo devera atender especifi",
+        "\\A1;Guarda-corpo devera atender especifi",
+        "\\A1;As paredes das caixas de escadas, da"
+      ]
+    },
+    {
+      "file": "tabela_05_score287_kw9.png",
+      "score": 287.0,
+      "keyword_count": 9,
+      "text_count": 17,
+      "text_height": 0.335,
+      "dpi": 4726,
+      "bbox": {
+        "x_min": 890.48,
+        "y_min": 418.12,
+        "x_max": 911.16,
+        "y_max": 429.25
+      },
+      "keywords": [
+        "ÁREA 1° PAVIMENTO",
+        "ÁREA TÉRREO",
+        "ÁREA TOTAL CONSTRUÇÃO",
+        "ÁREA PERMEÁVEL",
+        "ÁREA TOTAL TERRENO",
+        "ÁREA SUBSOLO",
+        "ÁREA COBERTA",
+        "{\\fArial|b1|i0|c0|p34;QUADRO DE ÁREAS"
+      ]
+    }
+  ]
+}

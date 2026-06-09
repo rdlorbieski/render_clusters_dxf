@@ -1,0 +1,122 @@
+{
+  "arquivo": "PSCIP_ALTO NORTE SEMENTES_FORMOSA-GOIAS_R01 - 1.441.44M2.dwg",
+  "qualidade_dwg": "media",
+  "motivo": "Arquivo com estrutura adequada: proporção 5.3:1, 385 textos. Extração de clusters funcional — recomenda-se conferir se os quadros de RT e legendas foram corretamente identificados.",
+  "text_height_global": 0.25,
+  "tabelas": [
+    {
+      "file": "tabela_01_score798_kw27.png",
+      "score": 798.0,
+      "keyword_count": 27,
+      "text_count": 63,
+      "text_height": 1.155,
+      "dpi": 1370,
+      "bbox": {
+        "x_min": 10869.15,
+        "y_min": -1769.15,
+        "x_max": 10985.34,
+        "y_max": -1607.88
+      },
+      "keywords": [
+        "\\A1;{\\fArial Narrow|b0|i0|c0|p34;CLASSIF",
+        "CONFORME NORMA TÉCNICA NT 11",
+        "{\\fArial|b0|i0|c0|p34;CONTROLE MATERIAIS",
+        "{\\fArial|b0|i0|c0|p34;CARGA DE INCÊNDIO ",
+        "CLASSIFICAÇÃO DAS EDIFICAÇÕES E ÁREAS DE",
+        "QUANTO À CARGA DE INCÊNDIO",
+        "OCUPAÇÃO/USO",
+        "CARGA DE INCÊNDIO MJ/M2"
+      ]
+    },
+    {
+      "file": "tabela_02_score691_kw22.png",
+      "score": 691.0,
+      "keyword_count": 22,
+      "text_count": 111,
+      "text_height": 1.933,
+      "dpi": 819,
+      "bbox": {
+        "x_min": 10850.95,
+        "y_min": -2119.42,
+        "x_max": 11689.36,
+        "y_max": -1798.62
+      },
+      "keywords": [
+        "ILUMINAÇÃO DE EMERGÊNCIA",
+        "A sinalização apropriada deve ser instal",
+        "DETALHE - ILUMINAÇÃO DE EMERGÊNCIA",
+        "{\\C256;EDIFICAÇÃO",
+        "{\\C256;DIVISÃO*",
+        "{\\C256;ÁREA (m²)",
+        "{\\C256;QUADRO DE ÁREAS",
+        "\\pxql,t0;{\\fArial|b1|i0|c0|p34;\\C256;TOT"
+      ]
+    },
+    {
+      "file": "tabela_03_score282_kw7.png",
+      "score": 282.0,
+      "keyword_count": 7,
+      "text_count": 42,
+      "text_height": 0.16,
+      "dpi": 9900,
+      "bbox": {
+        "x_min": 9907.62,
+        "y_min": -1557.59,
+        "x_max": 9982.19,
+        "y_max": -1487.36
+      },
+      "keywords": [
+        "{\\fSwis721 Cn BT|b0|i0|c0|p34;ESC.: 1:10",
+        "{\\fSwis721 Cn BT|b0|i0|c0|p34;ESC.: 1:10",
+        "\\pxqj;NOTA : A PORTA  DEVERÁ PERMANECER ",
+        "\\pxqj;NOTA : PORTÃO DEVERÁ PERMANECER AB",
+        "\\pxqj;NOTA : PORTÃO DEVERÁ PERMANECER AB",
+        "\\pxqj;NOTA : PORTÃO DEVERÁ PERMANECER DE",
+        "{\\H0.88522x;NOTA: COPA - \\H0.94138x;O SU"
+      ]
+    },
+    {
+      "file": "tabela_04_score235_kw8.png",
+      "score": 235.0,
+      "keyword_count": 8,
+      "text_count": 25,
+      "text_height": 1.933,
+      "dpi": 819,
+      "bbox": {
+        "x_min": 10995.74,
+        "y_min": -1844.58,
+        "x_max": 11195.16,
+        "y_max": -1800.36
+      },
+      "keywords": [
+        "{\\C256;GRUPO",
+        "{\\C256;OCUPAÇÃO",
+        "{\\C256;DIVISÃO",
+        "{\\fArial|b1|i0|c0|p34;\\C256;QUADRO 01. C",
+        "{\\C256;D-1",
+        "{\\C256;F-8",
+        "{\\C256;C-1",
+        "{\\C256;Comercio com baixa carga de incên"
+      ]
+    },
+    {
+      "file": "tabela_05_score132_kw3.png",
+      "score": 132.0,
+      "keyword_count": 3,
+      "text_count": 42,
+      "text_height": 2.578,
+      "dpi": 614,
+      "bbox": {
+        "x_min": 11535.9,
+        "y_min": -1737.07,
+        "x_max": 11748.32,
+        "y_max": -1643.43
+      },
+      "keywords": [
+        "{\\fArial|b1|i0|c0|p34;EXTINTORES  | PORT",
+        "{\\fArial|b1|i0|c0|p34;EDIFICAÇÃO",
+        "{\\C256;* Ver a Capacidade Extintora de c"
+      ]
+    }
+  ]
+}

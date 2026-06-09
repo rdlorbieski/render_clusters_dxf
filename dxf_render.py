@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Iterable, NamedTuple
 
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure as _MplFigure
 
 import ezdxf
 from ezdxf import bbox
@@ -50,6 +51,16 @@ from ezdxf.addons.drawing.config import (
     Configuration, BackgroundPolicy, ColorPolicy,
     LineweightPolicy, TextPolicy,
 )
+
+
+# LEADER é excluído porque entidades LEADER corrompidas geram virtual entities
+# enormes que destroem a render. O conteúdo real está em INSERT e TEXT.
+_FILL_ENTITY_TYPES: frozenset[str] = frozenset({"HATCH", "MPOLYGON", "WIPEOUT", "LEADER"})
+
+
+def _no_fill_filter(entity) -> bool:
+    """Retorna False para entidades de preenchimento — pula na renderização."""
+    return entity.dxftype() not in _FILL_ENTITY_TYPES
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -314,10 +325,15 @@ def find_top_clusters(
 # ═════════════════════════════════════════════════════════════════════════════
 
 
+_EXCLUDE_TYPES_DEFAULT: frozenset[str] = frozenset({"HATCH", "WIPEOUT", "LEADER"})
+
+
 def filter_entities_by_bbox(
     msp,
     region: tuple[float, float, float, float],
     layer: str | None = None,
+    cache: "bbox.Cache | None" = None,
+    exclude_types: frozenset[str] | None = None,
 ):
     """Retorna apenas as entidades cuja bbox intersecta a região.
 
@@ -335,22 +351,35 @@ def filter_entities_by_bbox(
         msp: Modelspace do DXF.
         region: ``(xmin, ymin, xmax, ymax)`` em unidades DXF.
         layer: Se fornecido, inclui apenas entidades desta layer.
+        cache: ``bbox.Cache`` compartilhado entre chamadas do mesmo arquivo.
+            Se None, cria um cache local descartável. Passar o mesmo cache
+            entre múltiplos renders do mesmo DXF evita recalcular bbox de
+            blocos repetidos (INSERTs) — principal ganho de performance.
+        exclude_types: Tipos de entidade DXF a ignorar. Se None, usa
+            _EXCLUDE_TYPES_DEFAULT (HATCH e WIPEOUT), que são preenchimentos
+            que raramente contribuem com informação útil em análise PSCIP e
+            frequentemente cobrem o conteúdo real. Passe frozenset() para
+            incluir todos os tipos.
 
     Returns:
         Lista de entidades DXF cuja bounding box intersecta ``region``.
 
     Performance:
         70.000 entidades → ~6s. Cache interno acelera bbox de blocos
-        repetidos (INSERTs).
+        repetidos (INSERTs). Reutilizar o cache entre chamadas reduz esse
+        custo para a primeira chamada apenas.
     """
+    _excl = _EXCLUDE_TYPES_DEFAULT if exclude_types is None else exclude_types
     xmin, ymin, xmax, ymax = region
-    cache = bbox.Cache()
+    _cache = cache if cache is not None else bbox.Cache()
     keep = []
     for e in msp:
+        if e.dxftype() in _excl:
+            continue
         if layer is not None and e.dxf.get("layer", "0") != layer:
             continue
         try:
-            b = bbox.extents([e], fast=True, cache=cache)
+            b = bbox.extents([e], fast=True, cache=_cache)
             if b.has_data:
                 mn, mx = b.extmin, b.extmax
                 if not (mx.x < xmin or mn.x > xmax or
@@ -578,6 +607,8 @@ def render_region(
     bg_color: str = "#ffffff",
     layer: str | None = None,
     verbose: bool = True,
+    bbox_cache: "bbox.Cache | None" = None,
+    exclude_types: frozenset[str] | None = None,
 ) -> bool:
     """Renderiza uma região quadrada do DXF como PNG em alta qualidade.
 
@@ -618,7 +649,8 @@ def render_region(
     if verbose:
         print(f"    filtrando…", end=" ", flush=True)
     t0 = time.time()
-    entidades = filter_entities_by_bbox(doc.modelspace(), region, layer=layer)
+    entidades = filter_entities_by_bbox(doc.modelspace(), region, layer=layer,
+                                        cache=bbox_cache, exclude_types=exclude_types)
     if verbose:
         print(f"{len(entidades)} entidades ({time.time()-t0:.1f}s)")
 
@@ -637,11 +669,15 @@ def render_region(
     # figsize em polegadas: 1 unidade DXF = 1 pt = 1/72 polegada.
     # px_total = side/72 * dpi
     fig_in = side / 72.0
-    fig, ax = plt.subplots(figsize=(fig_in, fig_in))
+    # Usar Figure() diretamente (não plt.subplots) para ser thread-safe:
+    # plt.subplots registra na figura global do pyplot; Figure() é isolada.
+    fig = _MplFigure(figsize=(fig_in, fig_in))
+    ax = fig.add_subplot(1, 1, 1)
 
     ctx = RenderContext(doc)
     backend = MatplotlibBackend(ax)
-    Frontend(ctx, backend, config=config).draw_entities(entidades)
+    Frontend(ctx, backend, config=config).draw_entities(entidades,
+                                                        filter_func=_no_fill_filter)
 
     # CRÍTICO: limites DEPOIS de draw_entities (não draw_layout!)
     ax.set_xlim(region[0], region[2])
@@ -653,9 +689,115 @@ def render_region(
 
     fig.savefig(output_path, dpi=dpi, bbox_inches=None, pad_inches=0,
                 facecolor=bg_color)
-    plt.close(fig)
+    fig.clf()
 
     if verbose:
         size_kb = output_path.stat().st_size / 1024
         print(f"{size_kb:.0f} KB ({time.time()-t0:.1f}s)")
+    return True
+
+
+# Paleta de cores para os retângulos de overlay (ciclada por índice).
+_RECT_COLORS = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
+                "#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080"]
+
+
+def render_overview_with_rects(
+    doc,
+    rects: list[tuple[float, float, float, float]],
+    output_path: str | Path,
+    *,
+    labels: list[str] | None = None,
+    region: tuple[float, float, float, float] | None = None,
+    dpi: int = 150,
+    max_px: int = 4000,
+    config: Configuration | None = None,
+    bg_color: str = "#ffffff",
+    bbox_cache: "bbox.Cache | None" = None,
+    exclude_types: frozenset[str] | None = None,
+    verbose: bool = False,
+) -> bool:
+    """Renderiza uma visão geral do desenho com retângulos sobrepostos.
+
+    Útil para visualizar ONDE os clusters detectados estão no desenho
+    completo — cada retângulo marca uma região que seria recortada.
+
+    Args:
+        doc: Documento DXF.
+        rects: Lista de ``(xmin, ymin, xmax, ymax)`` em unidades DXF.
+        output_path: Caminho do PNG de saída.
+        labels: Rótulos opcionais para cada retângulo (ex.: "1", "2"…).
+        region: Janela a renderizar ``(xmin, ymin, xmax, ymax)``. Se None,
+            usa a união de todos os ``rects`` + 8% de folga.
+        dpi: Resolução base; o lado em px é limitado a ``max_px``.
+        max_px: Lado máximo do PNG em pixels.
+
+    Returns:
+        True se renderizou; False se a região ficou vazia.
+    """
+    output_path = Path(output_path)
+
+    # Define a janela: união dos rects + folga, se não informada.
+    if region is None:
+        if not rects:
+            return False
+        xmin = min(r[0] for r in rects)
+        ymin = min(r[1] for r in rects)
+        xmax = max(r[2] for r in rects)
+        ymax = max(r[3] for r in rects)
+        pad = max(xmax - xmin, ymax - ymin) * 0.08
+        region = (xmin - pad, ymin - pad, xmax + pad, ymax + pad)
+
+    rx0, ry0, rx1, ry1 = region
+    rw, rh = rx1 - rx0, ry1 - ry0
+    if rw <= 0 or rh <= 0:
+        return False
+
+    entidades = filter_entities_by_bbox(doc.modelspace(), region,
+                                        cache=bbox_cache,
+                                        exclude_types=exclude_types)
+    if not entidades:
+        return False
+
+    if config is None:
+        config = build_config(bg_color=bg_color)
+
+    # figsize proporcional à região (não força quadrado — overview pode ser
+    # retangular). Limita o lado maior a max_px.
+    longer = max(rw, rh)
+    eff_dpi = min(dpi, int(max_px * 72 / longer)) if longer > 0 else dpi
+    eff_dpi = max(eff_dpi, 20)
+    fig_w = rw / 72.0
+    fig_h = rh / 72.0
+    fig = _MplFigure(figsize=(fig_w, fig_h))
+    ax = fig.add_subplot(1, 1, 1)
+
+    ctx = RenderContext(doc)
+    backend = MatplotlibBackend(ax)
+    Frontend(ctx, backend, config=config).draw_entities(
+        entidades, filter_func=_no_fill_filter)
+
+    # Overlay: retângulos coloridos + rótulos
+    from matplotlib.patches import Rectangle
+    for i, (x0, y0, x1, y1) in enumerate(rects):
+        color = _RECT_COLORS[i % len(_RECT_COLORS)]
+        ax.add_patch(Rectangle(
+            (x0, y0), x1 - x0, y1 - y0,
+            fill=False, edgecolor=color, linewidth=2.0, zorder=1000))
+        lbl = labels[i] if labels and i < len(labels) else str(i + 1)
+        ax.text(x0, y1, f" {lbl} ", color="white", fontsize=9,
+                fontweight="bold", va="bottom", ha="left", zorder=1001,
+                bbox=dict(boxstyle="square,pad=0.1", facecolor=color,
+                          edgecolor="none"))
+
+    ax.set_xlim(rx0, rx1)
+    ax.set_ylim(ry0, ry1)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_axis_off()
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.patch.set_facecolor(bg_color)
+
+    fig.savefig(output_path, dpi=eff_dpi, bbox_inches=None, pad_inches=0,
+                facecolor=bg_color)
+    fig.clf()
     return True

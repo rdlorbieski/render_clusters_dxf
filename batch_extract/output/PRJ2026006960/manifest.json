@@ -1,0 +1,120 @@
+{
+  "arquivo": "PRJ2026006960.dxf",
+  "qualidade_dwg": "alta",
+  "motivo": "Arquivo bem estruturado: planta com proporção 2.1:1 (regular) e 722 textos identificados. Localização de quadros, carimbos e informações de PSCIP deve ser precisa.",
+  "text_height_global": 8.07,
+  "tabelas": [
+    {
+      "file": "tabela_01_score3599_kw88.png",
+      "score": 3599.0,
+      "keyword_count": 88,
+      "text_count": 719,
+      "text_height": 10.0,
+      "dpi": 158,
+      "bbox": {
+        "x_min": 336547.11,
+        "y_min": 7694325.62,
+        "x_max": 362583.45,
+        "y_max": 7706486.16
+      },
+      "keywords": [
+        "|  |    |  Acesso de Viaturas | Alarme  ",
+        "\\pi1.3409;Esta edificação está dotada do",
+        "CLASSIFICACAO",
+        "OCUPAÇÃO: ESPECIAL M-3(SUBESTAÇÃO ELÉTRI",
+        "RESP. TÉCNICO MARCO ANTÔNIO GOMIDE REIS ",
+        "MARCO ANTÔNIO GOMIDE REIS CREA/MG 29.298",
+        "RESPONSÁVEL TÉCNICO",
+        "ÁREA PÁTIO EQUIP.:1.293,20m² - ÁREA CONS"
+      ]
+    },
+    {
+      "file": "tabela_02_score494_kw10.png",
+      "score": 494.0,
+      "keyword_count": 10,
+      "text_count": 194,
+      "text_height": 21.6,
+      "dpi": 73,
+      "bbox": {
+        "x_min": 337245.04,
+        "y_min": 7697767.95,
+        "x_max": 349346.43,
+        "y_max": 7705847.38
+      },
+      "keywords": [
+        "INDICAÇÃO DE LOCALIZAÇÃO DOS EXTINTORES ",
+        "\\pxql;EXTINTOR DE INCÊNDIO",
+        "INDICAÇÃO DOS SISTEMAS DE PROTEÇÃO CONTR",
+        "INSTALAR NA ENTRADA PRINCIPAL DA EDIFICA",
+        "QUADRO DE ÁREAS (m²)",
+        "EDIFICAÇÃO DE APOIO",
+        "ÁREA TOTAL",
+        "\\pxa0.66667,sm1.0792,qj;{\\fCalibri|b0|i0"
+      ]
+    },
+    {
+      "file": "tabela_03_score376_kw11.png",
+      "score": 376.0,
+      "keyword_count": 11,
+      "text_count": 66,
+      "text_height": 8.0,
+      "dpi": 198,
+      "bbox": {
+        "x_min": 356964.52,
+        "y_min": 7704841.89,
+        "x_max": 362039.3,
+        "y_max": 7706024.82
+      },
+      "keywords": [
+        "| QUADRO ILUMINAÇÃO DE EMERGÊNCIA",
+        "{\\H0.91667x;\\C0;A fiação do sistema de i",
+        "{\\H0.91667x;\\C0;O funcionamento do siste",
+        "\\pxsm1,ql;{\\fCalibri|b0|i0|c0|p34;\\C0;NO",
+        "Área: 15,90m²",
+        "ÁREA: 93,37m²",
+        "Área: 5,50m²",
+        "População Prev. | (Tab. 4/IT-08)"
+      ]
+    },
+    {
+      "file": "tabela_04_score188_kw4.png",
+      "score": 188.0,
+      "keyword_count": 4,
+      "text_count": 8,
+      "text_height": 51.762,
+      "dpi": 40,
+      "bbox": {
+        "x_min": 350209.97,
+        "y_min": 7697744.29,
+        "x_max": 351830.59,
+        "y_max": 7698690.64
+      },
+      "keywords": [
+        "EXTINTOR S/RODAS TIPO PQS, 50KG (Cap. ex",
+        "ACESSO DE VIATURA NA EDIFICAÇÃO E ÁREA D",
+        "SINALIZAÇÃO DE EXTINTOR DE INCÊNDIO",
+        "EXTINTOR PORTÁTIL TIPO PQS (Cap. ext. 80"
+      ]
+    },
+    {
+      "file": "tabela_05_score175_kw4.png",
+      "score": 175.0,
+      "keyword_count": 4,
+      "text_count": 55,
+      "text_height": 8.0,
+      "dpi": 198,
+      "bbox": {
+        "x_min": 354551.34,
+        "y_min": 7705031.16,
+        "x_max": 356798.91,
+        "y_max": 7705977.5
+      },
+      "keywords": [
+        "Área: 5,50m²",
+        "Área: 15,90m²",
+        "ÁREA: 93,37m²",
+        "PLANTA ELETROCENTRO  - 2º PAVIMENTO | {\\"
+      ]
+    }
+  ]
+}

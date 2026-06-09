@@ -1,0 +1,128 @@
+{
+  "arquivo": "PRJ2026005112.dxf",
+  "qualidade_dwg": "media",
+  "motivo": "Arquivo com estrutura adequada: proporção 7.7:1, 3277 textos. Extração de clusters funcional — recomenda-se conferir se os quadros de RT e legendas foram corretamente identificados.",
+  "text_height_global": 10.0,
+  "tabelas": [
+    {
+      "file": "tabela_01_score5855_kw95.png",
+      "score": 5855.0,
+      "keyword_count": 95,
+      "text_count": 2155,
+      "text_height": 10.0,
+      "dpi": 158,
+      "bbox": {
+        "x_min": -35504.83,
+        "y_min": -27959.58,
+        "x_max": 1154.15,
+        "y_max": -23632.0
+      },
+      "keywords": [
+        "ÁREA DESCOBERTA 15,12m²",
+        "ÁREA DE PROJEÇÃO  | PLACAS FOTOVOLTAÍCAS",
+        "ÁREA COBERTA | AVERBADA | 25,19m²",
+        "ÁREA COBERTA | AVERBADA | 37,11m²",
+        "ÁREA NÃO COBERTA 1,00m²",
+        "ÁREA AVERBADA | 23,38m²",
+        "GRUPO MOTOGERADOR | 12,50m²",
+        "ÁREA SERVIÇO | 5,48m²"
+      ]
+    },
+    {
+      "file": "tabela_02_score1325_kw33.png",
+      "score": 1325.0,
+      "keyword_count": 33,
+      "text_count": 315,
+      "text_height": 8.077,
+      "dpi": 196,
+      "bbox": {
+        "x_min": -41086.78,
+        "y_min": -27395.12,
+        "x_max": -35661.62,
+        "y_max": -23443.85
+      },
+      "keywords": [
+        "OCUPAÇÃO",
+        "GRUPO",
+        "DIVISÃO",
+        "CARGA DE INCÊNDIO | EM MJ/M2",
+        "CLASSIFICAÇÃO DE OCUPAÇÃO E CARGA DE INC",
+        "QUADRO INFORMATIVO MEDIDAS DE SEGURANÇA¹",
+        "MEDIDAS DE SEGURANÇA",
+        "SITUAÇÃO DA EDIFICAÇÃO"
+      ]
+    },
+    {
+      "file": "tabela_03_score958_kw16.png",
+      "score": 958.0,
+      "keyword_count": 16,
+      "text_count": 478,
+      "text_height": 10.0,
+      "dpi": 158,
+      "bbox": {
+        "x_min": 1561.82,
+        "y_min": -27395.12,
+        "x_max": 17743.2,
+        "y_max": -23569.29
+      },
+      "keywords": [
+        "ESC. 1:100",
+        "ESC. 1:100",
+        "ÁREA COBERTA | AVERBADA",
+        "\\pxql;Janela tipo veneziana com ventilaç",
+        "\\pxql;{\\C10;IT 08 ITEM 5.7.8.4 |       A",
+        "EXTINTOR CARGA PÓ TIPO ABC 2A- 20B:C",
+        "PONTO DE ILUMINAÇÃO DE EMERGÊNCIA",
+        "ABRIGO PARA EXTINTOR"
+      ]
+    },
+    {
+      "file": "tabela_04_score594_kw12.png",
+      "score": 594.0,
+      "keyword_count": 12,
+      "text_count": 234,
+      "text_height": 9.8,
+      "dpi": 161,
+      "bbox": {
+        "x_min": 20753.69,
+        "y_min": -27395.12,
+        "x_max": 27934.96,
+        "y_max": -23600.64
+      },
+      "keywords": [
+        "{\\L\\C8;NOTAS: | \\lA ALIMENTAÇÃO ELÉTRICA",
+        "{\\C20;NOTAS GERAIS: | 01- Cotas em centí",
+        "E.3.2  - QUADRO RESUMO DO SISTEMA DE HID",
+        "8-A ALIMENTAÇÃO ELÉTRICA DA BOMBA SERÁ I",
+        "EXTINTOR CARGA PÓ TIPO ABC 2A- 20B:C",
+        "PONTO DE ILUMINAÇÃO DE EMERGÊNCIA",
+        "ABRIGO PARA EXTINTOR",
+        "EXTINTOR CARGA CO2"
+      ]
+    },
+    {
+      "file": "tabela_05_score500_kw12.png",
+      "score": 500.0,
+      "keyword_count": 12,
+      "text_count": 140,
+      "text_height": 13.101,
+      "dpi": 120,
+      "bbox": {
+        "x_min": 18370.39,
+        "y_min": -27301.04,
+        "x_max": 23701.46,
+        "y_max": -23569.29
+      },
+      "keywords": [
+        "{\\L\\C8;NOTAS: | \\lA ALIMENTAÇÃO ELÉTRICA",
+        "{\\C20;NOTAS GERAIS: | 01- Cotas em centí",
+        "E.3.2  - QUADRO RESUMO DO SISTEMA DE HID",
+        "8-A ALIMENTAÇÃO ELÉTRICA DA BOMBA SERÁ I",
+        "EXTINTOR CARGA PÓ TIPO ABC 2A- 20B:C",
+        "PONTO DE ILUMINAÇÃO DE EMERGÊNCIA",
+        "ABRIGO PARA EXTINTOR",
+        "EXTINTOR CARGA CO2"
+      ]
+    }
+  ]
+}

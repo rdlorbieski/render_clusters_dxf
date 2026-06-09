@@ -1,0 +1,115 @@
+{
+  "arquivo": "PSCIP_VEGETAL AGRONEGOCIOS_FORMOSA-GOIAS_R00 - 889.98M2.dxf",
+  "qualidade_dwg": "alta",
+  "motivo": "Arquivo bem estruturado: planta com proporção 1.7:1 (regular) e 549 textos identificados. Localização de quadros, carimbos e informações de PSCIP deve ser precisa.",
+  "text_height_global": 0.08,
+  "tabelas": [
+    {
+      "file": "tabela_01_score761_kw24.png",
+      "score": 761.0,
+      "keyword_count": 24,
+      "text_count": 56,
+      "text_height": 1.155,
+      "dpi": 1370,
+      "bbox": {
+        "x_min": 8362.74,
+        "y_min": -1742.07,
+        "x_max": 8479.02,
+        "y_max": -1608.08
+      },
+      "keywords": [
+        "\\A1;{\\fArial Narrow|b0|i0|c0|p34;CLASSIF",
+        "CONFORME NORMA TÉCNICA NT 11",
+        "{\\fArial|b0|i0|c0|p34;CONTROLE MATERIAIS",
+        "{\\fArial|b0|i0|c0|p34;CARGA DE INCÊNDIO ",
+        "CLASSIFICAÇÃO DAS EDIFICAÇÕES E ÁREAS DE",
+        "QUANTO À CARGA DE INCÊNDIO",
+        "OCUPAÇÃO/USO",
+        "CARGA DE INCÊNDIO MJ/M2"
+      ]
+    },
+    {
+      "file": "tabela_02_score235_kw8.png",
+      "score": 235.0,
+      "keyword_count": 8,
+      "text_count": 25,
+      "text_height": 1.933,
+      "dpi": 819,
+      "bbox": {
+        "x_min": 8361.33,
+        "y_min": -1851.25,
+        "x_max": 8557.71,
+        "y_max": -1808.01
+      },
+      "keywords": [
+        "{\\C256;GRUPO",
+        "{\\C256;OCUPAÇÃO",
+        "{\\C256;DIVISÃO",
+        "{\\fArial|b1|i0|c0|p34;\\C256;QUADRO 01. C",
+        "{\\C256;D-1",
+        "{\\C256;F-8",
+        "{\\C256;C-1",
+        "{\\C256;Comercio com baixa carga de incên"
+      ]
+    },
+    {
+      "file": "tabela_03_score221_kw8.png",
+      "score": 221.0,
+      "keyword_count": 8,
+      "text_count": 41,
+      "text_height": 1.933,
+      "dpi": 819,
+      "bbox": {
+        "x_min": 8361.33,
+        "y_min": -1970.36,
+        "x_max": 8491.07,
+        "y_max": -1893.08
+      },
+      "keywords": [
+        "{\\C256;EDIFICAÇÃO",
+        "{\\C256;DIVISÃO",
+        "{\\C256;ÁREA (m²)",
+        "{\\C256;QUADRO DE ÁREAS",
+        "\\pxql,t0;{\\fArial|b1|i0|c0|p34;\\C256;TOT",
+        "{\\C256;D-1",
+        "{\\C256;C-1",
+        "{\\C256;F-8"
+      ]
+    },
+    {
+      "file": "tabela_04_score168_kw2.png",
+      "score": 168.0,
+      "keyword_count": 2,
+      "text_count": 3,
+      "text_height": 1.168,
+      "dpi": 1356,
+      "bbox": {
+        "x_min": 8441.44,
+        "y_min": -1686.06,
+        "x_max": 9190.11,
+        "y_max": -1480.46
+      },
+      "keywords": [
+        "{\\fArial|b1|i0|c0|p34;\\LAcesso de Viatur",
+        "\\pxqj;{\\fTahoma|b1|i0|c0|p34;\\L | Notas "
+      ]
+    },
+    {
+      "file": "tabela_05_score155_kw1.png",
+      "score": 155.0,
+      "keyword_count": 1,
+      "text_count": 95,
+      "text_height": 0.084,
+      "dpi": 18842,
+      "bbox": {
+        "x_min": 9886.32,
+        "y_min": -1797.37,
+        "x_max": 9921.77,
+        "y_max": -1761.92
+      },
+      "keywords": [
+        "{\\H0.88522x;NOTA: COPA - \\H0.94138x;O SU"
+      ]
+    }
+  ]
+}
