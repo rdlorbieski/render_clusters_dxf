@@ -4,10 +4,12 @@ services:
       context: .
       dockerfile: Dockerfile
     image: dxf-render-api:latest
-    container_name: dxf-render-api
-    restart: unless-stopped
-    ports:
-      - "${API_PORT:-8000}:8000"
+    container_name: trem-visao
+    restart: always
+    expose:
+      - "8000"
+    networks:
+      - edge
     environment:
       # Credenciais R2 — todas vêm do .env (NÃO commitar)
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
@@ -33,3 +35,7 @@ services:
           memory: 4G
         reservations:
           memory: 512M
+
+networks:
+  edge:
+    external: true
