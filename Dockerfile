@@ -27,7 +27,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Código da aplicação
-COPY api.py dxf_render.py ./
+COPY api.py dxf_render.py converter.py ./
+COPY table_pipeline/ ./table_pipeline/
 
 # Usuário não-root para segurança
 RUN useradd --create-home --shell /bin/bash app \
