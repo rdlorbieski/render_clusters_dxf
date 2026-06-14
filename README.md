@@ -10,7 +10,6 @@ API HTTP para **extrair e renderizar regiões informativas** de arquivos DXF (Au
 - **Localiza automaticamente** as regiões mais valiosas do desenho usando clustering por densidade de texto + pontuação por palavras-chave PSCIP (CREA, RT, M-3, Saídas de Emergência, Extintores, etc.).
 - **Aceita CSV ou strings livres** como entrada, permitindo focar na busca por valores específicos (ex.: dados do projeto, nomes de salas).
 - **Classifica a qualidade do DXF** (alta, média, baixa) e ajusta automaticamente os parâmetros de render — funciona em modelspace UTM, mm/paper-space e tudo entre.
-- **Sobe os PNGs no Cloudflare R2** (opcional) quando configurado.
 
 ---
 
@@ -25,7 +24,6 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-cp .env.example .env             # editar com credenciais R2 (se for usar)
 uvicorn api:app --reload
 ```
 
@@ -34,13 +32,7 @@ API disponível em `http://localhost:8000/docs` (Swagger UI).
 ### Docker (produção)
 
 ```bash
-cp .env.example .env             # editar com credenciais reais
 docker compose up -d --build
-```
-
-Para mais workers em produção:
-```bash
-UVICORN_WORKERS=4 docker compose up -d
 ```
 
 ---
@@ -51,12 +43,7 @@ Variáveis de ambiente (arquivo `.env`):
 
 | Variável | Obrigatória | Default | Descrição |
 |----------|-------------|---------|-----------|
-| `R2_ACCOUNT_ID` | Sim (se R2) | — | ID da conta Cloudflare R2 |
-| `R2_ACCESS_KEY_ID` | Sim (se R2) | — | Access key R2 |
-| `R2_SECRET_ACCESS_KEY` | Sim (se R2) | — | Secret key R2 |
-| `R2_BUCKET` | Não | `trem` | Nome do bucket |
-| `R2_BASE_URL` | Não | — | URL pública (`https://pub-xxx.r2.dev`) |
-| `UVICORN_WORKERS` | Não | `2` | Workers do uvicorn |
+| `UVICORN_WORKERS` | Não | `1` | Workers do uvicorn |
 | `API_PORT` | Não | `8000` | Porta exposta |
 
 ---
@@ -170,7 +157,6 @@ O score total do cluster = soma dos scores dos seus membros. A ordenação prior
 ```
 api.py                    # FastAPI: endpoints + helpers de scoring e qualidade
 dxf_render.py             # Renderização pura: bbox, color policy, render_region
-cloudflare_r2.py          # Upload/download do R2 (opcional)
 extract_region.py         # Script standalone (CLI) para extrair UMA região
 render_text_clusters.py   # Script standalone (CLI) para top clusters
 ```
@@ -195,7 +181,6 @@ Detalhes completos com workarounds em [`DOCUMENTACAO.md`](DOCUMENTACAO.md#6-quan
 - **FastAPI** + **uvicorn** — servidor HTTP
 - **ezdxf** — leitura e parsing de DXF
 - **matplotlib** (backend Agg) — render PNG
-- **boto3** — integração R2 (S3-compatible)
 - **Docker** + **docker-compose** — empacotamento
 
 Python ≥ 3.10.

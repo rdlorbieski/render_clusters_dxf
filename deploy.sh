@@ -75,53 +75,28 @@ _get_env() {
     grep -E "^${1}=" .env | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true
 }
 
-# ─── Validação de variáveis obrigatórias ──────────────────────────────────────
-info "Validando variáveis de ambiente..."
+# ─── Variáveis opcionais — injeta defaults se ausentes ────────────────────────
+info "Verificando variáveis opcionais..."
 
-REQUIRED_VARS=("R2_ACCOUNT_ID" "R2_ACCESS_KEY_ID" "R2_SECRET_ACCESS_KEY" "R2_BUCKET")
-PLACEHOLDER_PATTERNS=("your_account_id_here" "your_access_key_here" "your_secret_key_here")
+declare -A DEFAULTS=( [UVICORN_WORKERS]=1 [API_PORT]=8000 )
 
-HAS_ERROR=0
-for var in "${REQUIRED_VARS[@]}"; do
+for var in "${!DEFAULTS[@]}"; do
     val=$(_get_env "$var")
     if [ -z "$val" ]; then
-        warn "Variável obrigatória não definida: ${BOLD}$var${NC}"
-        HAS_ERROR=1
-    else
-        # Verifica se ainda é valor de placeholder
-        for placeholder in "${PLACEHOLDER_PATTERNS[@]}"; do
-            if [ "$val" = "$placeholder" ]; then
-                warn "${BOLD}$var${NC} ainda usa valor de exemplo: '$placeholder'"
-                HAS_ERROR=1
-            fi
-        done
-    fi
-done
-
-# Vars opcionais — só avisa se ausentes
-OPTIONAL_VARS=("R2_BASE_URL" "UVICORN_WORKERS" "API_PORT")
-for var in "${OPTIONAL_VARS[@]}"; do
-    val=$(_get_env "$var")
-    if [ -z "$val" ]; then
-        warn "Variável opcional não definida (usando default): $var"
+        echo "${var}=${DEFAULTS[$var]}" >> .env
+        ok "$var não estava definido — adicionado ao .env com default: ${DEFAULTS[$var]}"
     else
         ok "$var = $val"
     fi
 done
-
-[ "$HAS_ERROR" -eq 1 ] && error "Corrija as variáveis acima no .env antes de continuar."
-ok "Todas as variáveis obrigatórias estão definidas"
 echo
 
 # ─── Resumo das configs ────────────────────────────────────────────────────────
 API_PORT=$(_get_env "API_PORT"); API_PORT="${API_PORT:-8000}"
 WORKERS=$(_get_env "UVICORN_WORKERS"); WORKERS="${WORKERS:-2}"
-BUCKET=$(_get_env "R2_BUCKET"); BUCKET="${BUCKET:-trem}"
 
 echo -e "${BOLD}Configuração:${NC}"
-echo "  Porta API   : $API_PORT"
 echo "  Workers     : $WORKERS"
-echo "  Bucket R2   : $BUCKET"
 echo
 
 # ─── Build ────────────────────────────────────────────────────────────────────
@@ -148,7 +123,7 @@ WAITED=0
 HEALTHY=0
 
 while [ "$WAITED" -lt "$MAX_WAIT" ]; do
-    STATUS=$(docker inspect --format='{{.State.Health.Status}}' dxf-render-api 2>/dev/null || echo "unknown")
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' trem-visao 2>/dev/null || echo "unknown")
 
     if [ "$STATUS" = "healthy" ]; then
         HEALTHY=1
@@ -167,13 +142,13 @@ echo
 if [ "$HEALTHY" -eq 1 ]; then
     ok "API saudável!"
 else
-    STATUS=$(docker inspect --format='{{.State.Health.Status}}' dxf-render-api 2>/dev/null || echo "unknown")
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' trem-visao 2>/dev/null || echo "unknown")
     warn "Healthcheck não confirmou healthy em ${MAX_WAIT}s (status atual: $STATUS)"
     warn "Verifique os logs abaixo:"
     echo
     $DC logs --tail=30
     echo
-    warn "O container pode ainda estar inicializando. Tente: docker inspect dxf-render-api"
+    warn "O container pode ainda estar inicializando. Tente: docker inspect trem-visao"
 fi
 
 # ─── Status final ─────────────────────────────────────────────────────────────
@@ -183,8 +158,8 @@ $DC ps
 
 echo
 echo -e "${BOLD}╔══════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║  API disponível em: http://localhost:${API_PORT}  ║${NC}"
-echo -e "${BOLD}║  Docs:  http://localhost:${API_PORT}/docs        ║${NC}"
+echo -e "${BOLD}║  API disponível em: https://visao.tremprov.site      ║${NC}"
+echo -e "${BOLD}║  Docs:  https://visao.tremprov.site/docs             ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${NC}"
 echo
 echo "Logs em tempo real:  $DC logs -f"

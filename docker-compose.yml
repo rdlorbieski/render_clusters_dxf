@@ -11,17 +11,10 @@ services:
     networks:
       - edge
     environment:
-      # Credenciais R2 — todas vêm do .env (NÃO commitar)
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
-      R2_BUCKET: ${R2_BUCKET:-trem}
-      R2_BASE_URL: ${R2_BASE_URL:-}
-      # uvicorn
-      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
     env_file:
       - path: .env
-        required: false   # .env é opcional — vars obrigatórias vêm de environment: acima
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs').read()"]
       interval: 30s

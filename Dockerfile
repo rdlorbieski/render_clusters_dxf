@@ -27,7 +27,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Código da aplicação
-COPY api.py dxf_render.py cloudflare_r2.py ./
+COPY api.py dxf_render.py ./
 
 # Usuário não-root para segurança
 RUN useradd --create-home --shell /bin/bash app \
