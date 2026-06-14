@@ -52,15 +52,11 @@ info "Verificando arquivo .env..."
 
 if [ ! -f .env ]; then
     if [ -f .env.example ]; then
-        warn ".env não encontrado — copiando de .env.example"
         cp .env.example .env
-        warn "Edite .env com suas credenciais reais antes de continuar."
-        echo
-        cat .env
-        echo
-        error "Abortando. Configure o .env e rode o deploy novamente."
+        ok ".env criado a partir de .env.example"
     else
-        error ".env e .env.example não encontrados. Crie o arquivo .env com as variáveis necessárias."
+        warn ".env não encontrado — será criado vazio (defaults serão usados)"
+        touch .env
     fi
 fi
 
