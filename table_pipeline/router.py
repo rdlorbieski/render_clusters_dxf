@@ -153,7 +153,7 @@ def _empacotar_zip(result: PipelineResult, rendered: list[dict]) -> Response:
         headers={
             "Content-Disposition": 'attachment; filename="tabelas.zip"',
             "X-Qualidade-DWG": result.qualidade,
-            "X-Motivo": result.motivo,
+            "X-Motivo": result.motivo.encode("ascii", errors="replace").decode("ascii"),
             "X-Gap-Cells": str(result.gap_cells),
             "X-Tabelas": str(len(manifest)),
         },
