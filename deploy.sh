@@ -34,6 +34,14 @@ ok "Docker: $(docker --version)"
 ok "Compose: $($DC version 2>/dev/null | head -1)"
 echo
 
+# ─── ODA File Converter (.deb) ────────────────────────────────────────────────
+info "Verificando ODA File Converter (.deb para DWG → DXF)..."
+if [ ! -f docker/ODAFileConverter.deb ]; then
+    error "Não achei docker/ODAFileConverter.deb — necessário no build para a conversão DWG → DXF. Copie o instalador Linux do ODA File Converter para docker/ODAFileConverter.deb antes do deploy."
+fi
+ok "ODA File Converter .deb presente ($(du -h docker/ODAFileConverter.deb | cut -f1))"
+echo
+
 # ─── Git pull ─────────────────────────────────────────────────────────────────
 info "Atualizando código (git pull)..."
 

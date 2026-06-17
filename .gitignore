@@ -50,6 +50,10 @@ test_outputs/
 *.dxf
 *.dwg
 
+# Binário do ODA File Converter (56 MB — copiar manualmente em cada ambiente)
+docker/ODAFileConverter.deb
+*.deb
+
 # Logs
 *.log
 logs/
