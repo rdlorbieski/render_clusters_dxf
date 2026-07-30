@@ -1,93 +1,192 @@
-# trem-visao
+# DXF Render API
 
+API HTTP para **extrair e renderizar regiões informativas** de arquivos DXF (AutoCAD) como PNG legível, sem precisar abrir o AutoCAD. Detecta automaticamente carimbos de RT, quadros informativos, legendas e tabelas técnicas — ideal para automação de análise de projetos PSCIP (Prevenção e Combate a Incêndio e Pânico).
 
+---
 
-## Getting started
+## O que ela faz
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **Renderiza** qualquer região de um DXF em PNG de alta resolução (DPI adaptativo).
+- **Localiza automaticamente** as regiões mais valiosas do desenho usando clustering por densidade de texto + pontuação por palavras-chave PSCIP (CREA, RT, M-3, Saídas de Emergência, Extintores, etc.).
+- **Aceita CSV ou strings livres** como entrada, permitindo focar na busca por valores específicos (ex.: dados do projeto, nomes de salas).
+- **Classifica a qualidade do DXF** (alta, média, baixa) e ajusta automaticamente os parâmetros de render — funciona em modelspace UTM, mm/paper-space e tudo entre.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## Instalação
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### Local (desenvolvimento)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Linux/Mac
+
+pip install -r requirements.txt
+
+uvicorn api:app --reload
+```
+
+API disponível em `http://localhost:8000/docs` (Swagger UI).
+
+### Docker (produção)
+
+```bash
+docker compose up -d --build
+```
+
+---
+
+## Configuração
+
+Variáveis de ambiente (arquivo `.env`):
+
+| Variável | Obrigatória | Default | Descrição |
+|----------|-------------|---------|-----------|
+| `UVICORN_WORKERS` | Não | `1` | Workers do uvicorn |
+| `API_PORT` | Não | `8000` | Porta exposta |
+
+---
+
+## Endpoints
+
+| Endpoint | Entrada | Saída | Quando usar |
+|----------|---------|-------|-------------|
+| `POST /render-region` | DXF + `x`, `y` | PNG | Sabe exatamente onde quer recortar |
+| `POST /top-clusters` | DXF | JSON com 5 centros + scores | Descobre regiões valiosas sem palpite |
+| `POST /top-clusters-csv` | DXF + CSV | JSON com centros baseados em matches | Tem um CSV com dados a localizar no desenho |
+| `POST /render-clusters-csv` | DXF + CSV | ZIP de PNGs | Quer ver tudo do CSV de uma vez |
+| `POST /render-clusters-strings` | DXF | ZIP de PNGs | Procura automaticamente por keywords PSCIP (RT, CREA, Extintor, M-3...) |
+| `POST /diagnose` | DXF | JSON com layers, extents, side, etc. | Debug — entender o DXF antes de processar |
+
+Todos retornam (em JSON ou no header `X-Qualidade-DWG`) a qualidade detectada do DXF: **alta**, **media** ou **baixa**.
+
+---
+
+## Exemplos rápidos
+
+### 1. Renderizar uma região conhecida
+
+```bash
+curl -X POST "http://localhost:8000/render-region?x=358110.53&y=7705639.08" \
+     -F "file=@projeto.dxf" \
+     --output regiao.png
+```
+
+### 2. Descobrir as 5 regiões mais informativas
+
+```bash
+curl -X POST "http://localhost:8000/top-clusters?n=5" \
+     -F "file=@projeto.dxf"
+```
+
+Resposta:
+```json
+{
+  "qualidade_dwg": "alta",
+  "qualidade_motivo": "modelspace bem-formado (aspect 2.1, 722 textos)",
+  "dominant_layer": "2 - Textos",
+  "total_texts": 587,
+  "clusters": [
+    {
+      "x": 360787, "y": 7701611,
+      "text_count": 56, "keyword_count": 8, "score": 131.0
+    },
+    {
+      "x": 351431, "y": 7701201,
+      "text_count": 37, "keyword_count": 6, "score": 92.0
+    }
+  ]
+}
+```
+
+O cluster com **maior `score`** é o mais valioso — combina contagem de textos com bônus de palavras-chave PSCIP.
+
+### 3. Renderizar tudo de um CSV de uma vez
+
+```bash
+curl -X POST "http://localhost:8000/render-clusters-csv?n=5" \
+     -F "dxf=@projeto.dxf" \
+     -F "csv_file=@dados.csv" \
+     --output clusters.zip
+```
+
+O ZIP vem com `cluster_01_matches9.png`, `cluster_02_matches7.png`, etc.
+
+### 4. Renderizar blocos PSCIP automaticamente
+
+```bash
+curl -X POST "http://localhost:8000/render-clusters-strings?n=5" \
+     -F "dxf=@projeto.dxf" \
+     --output clusters.zip
+```
+
+Sem precisar passar palavras-chave — usa a lista interna (RT, CREA, Extintor, Saídas de Emergência, M-3, etc.).
+
+---
+
+## Detecção automática de qualidade
+
+A API classifica cada DXF e ajusta `side` de clustering, margem de render e DPI alvo:
+
+| Qualidade | Critério de detecção | Efeito interno |
+|-----------|---------------------|----------------|
+| **alta** | modelspace bem-formado (aspect ≤ 5, dim menor ≥ 5000, ≥200 textos) | janelas mais justas, render apertado |
+| **media** | qualquer caso intermediário | comportamento padrão |
+| **baixa** | paper-space (dim menor < 500) OU aspect ratio > 30 | janelas maiores, mais margem, DPI maior |
+
+Não precisa configurar nada — vem como saída para você saber o que esperar.
+
+---
+
+## Heurísticas de pontuação (scoring)
+
+O endpoint `/top-clusters` pontua cada texto:
+
+- **+1 ponto base** — qualquer texto não-vazio
+- **+10 pontos** por keyword PSCIP encontrada (CREA, Responsável Técnico, Saídas de Emergência, Extintor, Iluminação de Emergência, Sinalização de Emergência, Acesso de Viatura, Subestação de Energia, etc.)
+- **+10 pontos** se contém `RT` como token isolado
+- **+5 pontos** se contém classificação de ocupação (`A-1`, `M-3`, `F-8`, etc.)
+
+O score total do cluster = soma dos scores dos seus membros. A ordenação prioriza clusters semânticos (carimbo + medidas preventivas) sobre clusters puramente densos (tabelas de coordenadas).
+
+---
+
+## Arquitetura
 
 ```
-cd existing_repo
-git remote add origin http://git.maximizaia.cloud/clientes/trem/trem-visao.git
-git branch -M main
-git push -uf origin main
+api.py                    # FastAPI: endpoints + helpers de scoring e qualidade
+dxf_render.py             # Renderização pura: bbox, color policy, render_region
+extract_region.py         # Script standalone (CLI) para extrair UMA região
+render_text_clusters.py   # Script standalone (CLI) para top clusters
 ```
 
-## Integrate with your tools
+O pipeline completo está documentado em [`DOCUMENTACAO.md`](DOCUMENTACAO.md): cada passo (carregamento, análise, detecção de layer, cálculo de side, clusterização, render bounds, left-anchor, DPI adaptativo, render matplotlib) com suas limitações conhecidas.
 
-* [Set up project integrations](http://git.maximizaia.cloud/clientes/trem/trem-visao/-/settings/integrations)
+---
 
-## Collaborate with your team
+## Limitações conhecidas
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- DXFs gerados por softwares não-AutoCAD (Revit, BricsCAD) podem perder entidades proprietárias na leitura
+- Aspect ratios extremos (>100:1) podem produzir janelas com espaço em branco
+- Textos com 100+ caracteres por linha podem ser cortados à direita (ezdxf não expõe métricas de fonte)
+- Performance cai em DXFs com >50k entidades (~25s/cluster vs ~5s para 10k entidades)
 
-## Test and Deploy
+Detalhes completos com workarounds em [`DOCUMENTACAO.md`](DOCUMENTACAO.md#6-quando-a-api-não-vai-funcionar-bem).
 
-Use the built-in continuous integration in GitLab.
+---
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Stack
 
-***
+- **FastAPI** + **uvicorn** — servidor HTTP
+- **ezdxf** — leitura e parsing de DXF
+- **matplotlib** (backend Agg) — render PNG
+- **Docker** + **docker-compose** — empacotamento
 
-# Editing this README
+Python ≥ 3.10.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+---
 
-## Suggestions for a good README
+## Licença
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Uso interno.

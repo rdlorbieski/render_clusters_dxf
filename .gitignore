@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribuição / pacote
+*.egg
+MANIFEST
+
+# Testes / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Segredos / configuração local
+.env
+.env.local
+.env.*.local
+
+# Saídas geradas pela API
+test_outputs/
+*.png
+*.zip
+
+# Arquivos DXF (geralmente grandes, não versionar)
+*.dxf
+*.dwg
+
+# Binário do ODA File Converter (56 MB — copiar manualmente em cada ambiente)
+docker/ODAFileConverter.deb
+*.deb
+
+# Logs
+*.log
+logs/
+
+# Temporários
+*.tmp
+tmp/

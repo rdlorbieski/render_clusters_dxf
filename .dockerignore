@@ -1,0 +1,54 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual envs (devem ser construídos dentro do container)
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Segredos / configuração (passados via env runtime, NÃO embutir na imagem)
+.env
+.env.local
+.env.*.local
+
+# Documentação não necessária pra rodar
+README.md
+DOCUMENTACAO.md
+
+# Saídas / testes
+test_outputs/
+*.png
+*.zip
+*.dxf
+*.dwg
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Docker (evita auto-referência no contexto)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Scripts auxiliares fora do escopo da API
+extract_region.py
+render_text_clusters.py
