@@ -1,0 +1,288 @@
+<title>/tables/extract — o que cada passo faz</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#f0f3f8; --ink:#1a2230; --muted:#5b6675;
+    --line:#d9dee7; --accent:#2f6db5; --accent-soft:#e7eff9;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    /* cores por arquivo (iguais ao diagrama anterior) */
+    --c-router:#2f6db5; --c-api:#b7791f; --c-conv:#2c9c8a;
+    --c-pipe:#5b62c9; --c-geom:#3f9142; --c-render:#8a54c9; --c-exc:#c0574f;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0e131a; --surface:#161d27; --surface-2:#1b2430; --ink:#e6ebf2; --muted:#9aa7b8;
+      --line:#26303d; --accent:#6ea8e6; --accent-soft:#182533;
+      --c-router:#6ea8e6; --c-api:#e0b25c; --c-conv:#4fc3b1;
+      --c-pipe:#9aa0ec; --c-geom:#6fce72; --c-render:#b98ee6; --c-exc:#e0847b;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6f9; --surface:#ffffff; --surface-2:#f0f3f8; --ink:#1a2230; --muted:#5b6675;
+    --line:#d9dee7; --accent:#2f6db5; --accent-soft:#e7eff9;
+    --c-router:#2f6db5; --c-api:#b7791f; --c-conv:#2c9c8a;
+    --c-pipe:#5b62c9; --c-geom:#3f9142; --c-render:#8a54c9; --c-exc:#c0574f;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e131a; --surface:#161d27; --surface-2:#1b2430; --ink:#e6ebf2; --muted:#9aa7b8;
+    --line:#26303d; --accent:#6ea8e6; --accent-soft:#182533;
+    --c-router:#6ea8e6; --c-api:#e0b25c; --c-conv:#4fc3b1;
+    --c-pipe:#9aa0ec; --c-geom:#6fce72; --c-render:#b98ee6; --c-exc:#e0847b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:40px 22px 80px}
+
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:10px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+  h1{font-size:clamp(23px,3.3vw,32px);line-height:1.15;margin:0;text-wrap:balance;letter-spacing:-.01em}
+  .lede{color:var(--muted);margin:12px 0 0;max-width:66ch;font-size:15px}
+  code{font-family:var(--mono);font-size:.9em}
+  .lede code{background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:5px}
+
+  /* índice dos passos, logo no começo */
+  html{scroll-behavior:smooth}
+  .overview{margin:24px 0 6px;background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:18px 18px 8px}
+  .overview h2{margin:0 0 3px;font-size:12px;font-family:var(--mono);text-transform:uppercase;
+    letter-spacing:.1em;color:var(--muted);font-weight:600}
+  .overview .sub{margin:0 0 14px;color:var(--muted);font-size:13px}
+  .ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px}
+  .ov{display:flex;gap:11px;align-items:flex-start;text-decoration:none;color:inherit;
+    border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--bg);
+    transition:border-color .15s,transform .15s}
+  .ov:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .ov:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .ov .n{font-family:var(--mono);font-weight:700;font-size:16px;color:var(--accent);
+    line-height:1.05;flex:none;width:18px}
+  .ov .t{font-size:13px;line-height:1.32}
+  .ov .t b{display:block;font-weight:600;color:var(--ink);margin-bottom:1px;font-size:13.5px}
+  .ov .t span{color:var(--muted)}
+
+  /* trilho vertical contínuo com o número do passo */
+  .flow{position:relative;margin-top:26px}
+  .passo{position:relative;padding-left:66px;padding-top:14px;padding-bottom:14px;scroll-margin-top:16px}
+  .passo::before{content:"";position:absolute;left:23px;top:0;bottom:0;width:2px;background:var(--line)}
+  .passo:last-child::before{bottom:auto;height:34px}
+  .badge{position:absolute;left:0;top:14px;width:48px;height:48px;border-radius:50%;
+    background:var(--surface);border:2px solid var(--accent);color:var(--accent);
+    font-family:var(--mono);font-weight:700;font-size:19px;display:flex;
+    align-items:center;justify-content:center;z-index:1}
+  .phead{margin:2px 0 12px}
+  .phead h2{margin:0;font-size:18px;letter-spacing:-.01em}
+  .phead .goal{margin:4px 0 0;color:var(--muted);font-size:14.5px}
+
+  /* cartão de etapa */
+  .step{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;margin:0 0 10px;position:relative}
+  .step .fn{display:flex;align-items:center;gap:8px;margin:0 0 5px;flex-wrap:wrap}
+  .dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .step .fn b{font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--ink)}
+  .step .fn .file{font-family:var(--mono);font-size:11px;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+  .step .what{margin:0;font-size:14px;color:var(--ink)}
+  .step .what code{background:var(--surface-2);padding:0 4px;border-radius:4px}
+  .analogy{margin:7px 0 0;font-size:13px;color:var(--muted);font-style:italic;
+    padding-left:16px;position:relative}
+  .analogy::before{content:"\2248";position:absolute;left:0;font-style:normal;
+    font-weight:700;color:var(--accent)}
+
+  /* ramo de decisão / desvio */
+  .branch{border-left:3px solid var(--c-exc);background:var(--accent-soft);
+    border-radius:0 8px 8px 0;padding:9px 13px;margin:0 0 10px;font-size:13.5px}
+  .branch b{color:var(--c-exc)}
+
+  /* sub-bloco "para cada grupo" */
+  .loop{border:1px dashed var(--c-pipe);border-radius:11px;padding:12px 14px 4px;
+    margin:2px 0 12px;background:color-mix(in srgb,var(--c-pipe) 6%,transparent)}
+  .loop .loop-h{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--c-pipe);
+    text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px;display:flex;align-items:center;gap:7px}
+  .loop .loop-h::before{content:"\21BB";font-size:15px}
+
+  .final{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:0 10px 10px 0;padding:14px 16px;font-size:14.5px;margin-top:6px}
+  .final b{font-weight:600}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">render_clusters_dxf · passo a passo</p>
+    <h1>O que cada etapa faz, em português claro</h1>
+    <p class="lede">Mesmo fluxo do <code>POST /tables/extract</code>, só que agora
+      aberto por dentro: cada cartão traz o nome da função, o que ela faz sem jargão
+      e, quando ajuda, uma analogia (marcada com “≈”). A cor do quadradinho diz de
+      qual arquivo vem a função.</p>
+  </header>
+
+  <section class="overview">
+    <h2>Os 6 passos, de relance</h2>
+    <p class="sub">É essa a sequência que o <code>run_pipeline</code> segue. Clique num passo para pular direto pra ele.</p>
+    <div class="ov-grid">
+      <a class="ov" href="#passo-1"><span class="n">1</span><span class="t"><b>Avaliar qualidade</b><span>vale a pena tentar?</span></span></a>
+      <a class="ov" href="#passo-2"><span class="n">2</span><span class="t"><b>Medir a letra</b><span>a régua de tudo</span></span></a>
+      <a class="ov" href="#passo-3"><span class="n">3</span><span class="t"><b>Detectar tabelas</b><span>o coração</span></span></a>
+      <a class="ov" href="#passo-4"><span class="n">4</span><span class="t"><b>Anotar no log</b><span>pra depurar depois</span></span></a>
+      <a class="ov" href="#passo-5"><span class="n">5</span><span class="t"><b>Renderizar</b><span>vira imagem legível</span></span></a>
+      <a class="ov" href="#passo-6"><span class="n">6</span><span class="t"><b>Empacotar</b><span>ZIP + manifest</span></span></a>
+    </div>
+  </section>
+
+  <div class="flow">
+
+    <!-- PASSO 1 -->
+    <div class="passo" id="passo-1">
+      <div class="badge">1</div>
+      <div class="phead">
+        <h2>Vale a pena tentar? — avaliar a qualidade</h2>
+        <p class="goal">Antes de trabalhar, decide se o arquivo tem cara de que dá pra extrair as tabelas.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-render)"></span><b>analyze_dxf()</b><span class="file">dxf_render.py</span></p>
+        <p class="what">Tira as medidas do desenho: tamanho total (extents), quantos textos existem e quais cores dominam. É a <b>ficha técnica</b> do arquivo.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-api)"></span><b>_text_height_spread()</b><span class="file">api.py</span></p>
+        <p class="what">Compara a letra mais alta com a mais baixa. Se a diferença for absurda (ex.: <b>1690×</b>), o arquivo mistura o projeto com uma camada de topografia/cotas em outra escala.</p>
+        <p class="analogy">É como notar que na mesma folha tem letra de bula e letra de outdoor — sinal de que dois desenhos foram colados juntos.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-api)"></span><b>_detect_quality()</b><span class="file">api.py</span></p>
+        <p class="what">Junta tudo e dá uma nota: <b>alta</b>, <b>media</b> ou <b>baixa</b>.</p>
+      </div>
+
+      <div class="branch">
+        <b>Se a nota for baixa</b> (folha de impressão minúscula, quase sem texto, ou escalas misturadas) → para aqui e devolve um <code>200</code> com o motivo. Não insiste em algo que sairia errado.
+      </div>
+    </div>
+
+    <!-- PASSO 2 -->
+    <div class="passo" id="passo-2">
+      <div class="badge">2</div>
+      <div class="phead">
+        <h2>Qual é o tamanho da letra? — a régua de tudo</h2>
+        <p class="goal">Descobre a altura típica da letra do projeto. Esse número controla todo o PASSO 3.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-api)"></span><b>_text_height_dxf()</b><span class="file">api.py</span></p>
+        <p class="what">Olha a altura de <b>todos</b> os textos, joga fora a “escala gigante” da topografia e fica com a altura da letra de corpo (a das tabelas e notas). Esse valor vira a <b>régua</b>: define o tamanho da célula do grid, a margem de busca e o raio de agrupamento adiante.</p>
+        <p class="analogy">É como escolher o quadradinho do papel milimetrado com base no tamanho da letra que você vai desenhar.</p>
+      </div>
+    </div>
+
+    <!-- PASSO 3 -->
+    <div class="passo" id="passo-3">
+      <div class="badge">3</div>
+      <div class="phead">
+        <h2>Onde estão as tabelas? — o coração</h2>
+        <p class="goal">Usa as palavras-chave de PSCIP como âncoras e a geometria das linhas para desenhar o retângulo de cada tabela.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-geom)"></span><b>collect_text_boxes()</b><span class="file">geometry.py</span></p>
+        <p class="what">Lista cada texto do desenho com sua posição e o retângulo que ele ocupa.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-geom)"></span><b>collect_segments()</b><span class="file">geometry.py</span></p>
+        <p class="what">Lista cada linha do desenho — são as <b>bordas</b> que formam as grades das tabelas.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-api)"></span><b>_seed_keywords() → _text_score()</b><span class="file">api.py</span></p>
+        <p class="what">Marca os textos que contêm palavras de PSCIP (<code>EXTINTOR</code>, <code>RESPONSÁVEL TÉCNICO</code>, <code>QUADRO RESUMO</code>…). Cada um vira uma <b>semente</b> — um “aqui provavelmente tem tabela”.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-pipe)"></span><b>_group_seeds() · DBSCAN</b><span class="file">pipeline.py</span></p>
+        <p class="what">Agrupa as sementes que estão <b>fisicamente perto</b> umas das outras. O DBSCAN olha a densidade: keywords coladas viram um mesmo grupo (uma vizinhança ≈ uma tabela); keywords distantes viram grupos separados. Assim cada tabela é processada no seu cantinho, sem um grid gigante da prancha inteira.</p>
+        <p class="analogy">Como numa festa: quem está no mesmo canto forma uma roda; rodas afastadas são grupos diferentes. O DBSCAN acha as rodas sozinho, sem você dizer quantas são.</p>
+      </div>
+
+      <div class="loop">
+        <p class="loop-h">para cada grupo de keywords</p>
+
+        <div class="step">
+          <p class="fn"><span class="dot" style="background:var(--c-pipe)"></span><b>ROI — janela de busca</b><span class="file">pipeline.py</span></p>
+          <p class="what">Recorta uma janela ao redor das keywords do grupo, com margem folgada pra caber a tabela inteira (e não só as palavras).</p>
+        </div>
+
+        <div class="step">
+          <p class="fn"><span class="dot" style="background:var(--c-geom)"></span><b>build_occupancy()</b><span class="file">geometry.py</span></p>
+          <p class="what">Cobre a janela com um grid de células e pinta de “ocupado” toda célula que tem linha ou texto. Transforma o desenho num <b>bitmap preto-e-branco</b>.</p>
+          <p class="analogy">É como converter o recorte do desenho em pixel art de baixa resolução.</p>
+        </div>
+
+        <div class="step">
+          <p class="fn"><span class="dot" style="background:var(--c-geom)"></span><b>find_components()</b><span class="file">geometry.py</span></p>
+          <p class="what">Fecha pequenos vãos e acha as <b>manchas conectadas</b> de células ocupadas. Cada mancha densa (linhas + texto grudados) é uma candidata a tabela.</p>
+          <p class="analogy">Como o balde de tinta do Paint: tudo que está conectado vira uma mancha só.</p>
+        </div>
+
+        <div class="step">
+          <p class="fn"><span class="dot" style="background:var(--c-geom)"></span><b>component_bbox()</b><span class="file">geometry.py</span></p>
+          <p class="what">O retângulo que envolve a mancha = o <b>contorno da tabela</b>.</p>
+        </div>
+
+        <div class="step">
+          <p class="fn"><span class="dot" style="background:var(--c-pipe)"></span><b>_score_table()</b><span class="file">pipeline.py</span></p>
+          <p class="what">Soma a pontuação das keywords de todos os textos dentro do retângulo, conta as keywords e mede a altura da letra ali (pro DPI depois). <b>Descarta</b> se tiver menos de 2 keywords — keyword solta costuma ser falso positivo.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-pipe)"></span><b>ordena por pontuação</b><span class="file">pipeline.py</span></p>
+        <p class="what">As tabelas com mais keywords valiosas ficam no topo. As <b>N melhores</b> (padrão 5) seguem adiante.</p>
+      </div>
+    </div>
+
+    <!-- PASSO 4 -->
+    <div class="passo" id="passo-4">
+      <div class="badge">4</div>
+      <div class="phead">
+        <h2>Anota o que achou — log</h2>
+        <p class="goal">Registra no log do servidor a qualidade, os parâmetros do grid e as tabelas detectadas — só pra você conseguir depurar depois.</p>
+      </div>
+    </div>
+
+    <!-- PASSO 5 -->
+    <div class="passo" id="passo-5">
+      <div class="badge">5</div>
+      <div class="phead">
+        <h2>Vira imagem legível — render</h2>
+        <p class="goal">Transforma cada tabela detectada num PNG que um humano (ou um LLM/OCR) lê com folga.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-pipe)"></span><b>render_tables()</b><span class="file">pipeline.py</span>
+          <span class="dot" style="background:var(--c-render)"></span><b>render_overview_with_rects()</b><span class="file">dxf_render.py</span></p>
+        <p class="what">Recorta a região de cada tabela e gera um PNG. Calcula o <b>DPI</b> pra letra sair com ~22px de altura (dá pra ler) e força tudo <b>preto no branco</b> — cor não importa pra extrair dados, legibilidade sim. Usa o motor de desenho do ezdxf com o Matplotlib.</p>
+        <p class="analogy">Como dar zoom e scanear cada quadro em alto contraste, um por um.</p>
+      </div>
+    </div>
+
+    <!-- PASSO 6 -->
+    <div class="passo" id="passo-6">
+      <div class="badge">6</div>
+      <div class="phead">
+        <h2>Empacota e entrega — ZIP</h2>
+        <p class="goal">Junta o resultado num único arquivo pronto pro cliente.</p>
+      </div>
+
+      <div class="step">
+        <p class="fn"><span class="dot" style="background:var(--c-router)"></span><b>_empacotar_zip()</b><span class="file">router.py</span></p>
+        <p class="what">Coloca todos os PNGs + um <code>manifest.json</code> (pontuação, keywords, bbox e DPI de cada tabela) num <b><code>tabelas.zip</code></b> e devolve na resposta HTTP.</p>
+      </div>
+
+      <div class="final">
+        <b>E se algo falhar no meio?</b> Qualidade baixa (PASSO 1), nenhuma tabela encontrada (PASSO 3) ou nenhum PNG gerado (PASSO 5) não viram erro: todos convergem para um único <code>200</code> informativo em JSON, dizendo a qualidade e o motivo. O cliente sempre recebe uma resposta clara.
+      </div>
+    </div>
+
+  </div>
+</div>

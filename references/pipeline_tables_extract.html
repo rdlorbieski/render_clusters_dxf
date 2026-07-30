@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline /tables/extract — visão alto nível</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --surface:#ffffff; --ink:#1a2230; --muted:#5b6675;
+    --line:#d9dee7; --accent:#2f6db5; --accent-soft:#e7eff9;
+    --maxw:1080px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0e131a; --surface:#161d27; --ink:#e6ebf2; --muted:#9aa7b8;
+      --line:#26303d; --accent:#6ea8e6; --accent-soft:#182533;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:40px 24px 72px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:28px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+  h1{font-size:clamp(24px,3.4vw,34px);line-height:1.15;margin:0;text-wrap:balance;
+    letter-spacing:-.01em}
+  .lede{color:var(--muted);margin:12px 0 0;max-width:64ch;font-size:15.5px}
+  .lede code{font-family:var(--mono);font-size:.9em;background:var(--accent-soft);
+    color:var(--accent);padding:1px 6px;border-radius:5px}
+  .schematic{margin:0 0 30px;border:1px solid var(--line);border-radius:12px;
+    overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+  .schematic .bar{display:flex;align-items:center;gap:8px;padding:9px 14px;
+    background:var(--surface);border-bottom:1px solid var(--line)}
+  .schematic .bar span{width:10px;height:10px;border-radius:50%;background:var(--line)}
+  .schematic .bar b{font-family:var(--mono);font-size:12px;font-weight:600;
+    color:var(--muted);letter-spacing:.03em;margin-left:4px}
+  .canvas{background:
+      linear-gradient(#eef2f7 1px,transparent 1px) 0 0/26px 26px,
+      linear-gradient(90deg,#eef2f7 1px,transparent 1px) 0 0/26px 26px,
+      #fbfcfe;
+    padding:20px;overflow-x:auto}
+  .canvas pre.mermaid{margin:0;min-width:640px;background:transparent;
+    text-align:center;line-height:initial;border:0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+    gap:14px;margin:0 0 30px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px}
+  .card .top{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .sw{width:14px;height:14px;border-radius:4px;flex:none;border:1px solid rgba(0,0,0,.25)}
+  .card h3{margin:0;font-family:var(--mono);font-size:13px;font-weight:600}
+  .card p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+  .card p b{color:var(--ink);font-weight:600}
+  .note{background:var(--accent-soft);border:1px solid var(--line);
+    border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;
+    font-size:14px;color:var(--ink)}
+  .note b{font-weight:600}
+  .note code{font-family:var(--mono);font-size:.88em}
+  h2{font-size:13px;font-family:var(--mono);text-transform:uppercase;
+    letter-spacing:.1em;color:var(--muted);margin:0 0 14px;font-weight:600}
+  section{margin-bottom:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">render_clusters_dxf · arquitetura</p>
+    <h1>Pipeline de extração de tabelas PSCIP</h1>
+    <p class="lede">Do upload no endpoint <code>POST /tables/extract</code> até o
+      ZIP de PNGs. Cada caixa é uma etapa; a cor indica em qual arquivo ela mora.
+      As setas pontilhadas (<i>usa</i>) são chamadas de apoio a outros módulos.</p>
+  </header>
+
+  <div class="schematic">
+    <div class="bar"><span></span><span></span><span></span><b>fluxo /tables/extract</b></div>
+    <div class="canvas">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#eef2f7','lineColor':'#7488a0','tertiaryColor':'#f6f8fb'},'flowchart':{'curve':'basis','nodeSpacing':45,'rankSpacing':52,'htmlLabels':true,'padding':12,'useMaxWidth':true}}}%%
+flowchart TD
+  CLIENT([" Cliente · POST /tables/extract<br/>upload .dwg / .dxf "]):::io
+  CLIENT --> R1
+
+  R1["extract_tables_endpoint()"]:::router
+  R1 --> L1
+
+  L1{"_load_dxf_to_tmp()<br/>é .dwg?"}:::api
+  L1 -. sim .-> L2["convert_dwg_to_dxf()<br/>ODA File Converter → .dxf"]:::conv
+  L1 -. não .-> L4
+  L2 --> L4
+  L4["ezdxf recover.readfile()<br/>→ doc"]:::api
+  L4 --> P1
+
+  P1["PASSO 1 · _avaliar_qualidade()"]:::pipe
+  P1 -. usa .-> H1["analyze_dxf()"]:::render
+  P1 -. usa .-> H2["_detect_quality()<br/>_text_height_spread()"]:::api
+  P1 --> Q1{"qualidade == baixa?"}:::pipe
+  Q1 -- sim --> EQ["LowQualityDXFError"]:::exc
+  Q1 -- não --> P2["PASSO 2 · _text_height_dxf()<br/>altura de texto robusta"]:::pipe
+
+  P2 --> P3["PASSO 3 · detect_tables()"]:::pipe
+  P3 -. usa .-> G1["collect_text_boxes()<br/>collect_segments()"]:::geom
+  P3 -. usa .-> S1["_seed_keywords() → _text_score()"]:::api
+  P3 -. usa .-> S2["_group_seeds() · DBSCAN"]:::pipe
+  P3 -. usa .-> G2["build_occupancy()<br/>find_components()<br/>component_bbox()"]:::geom
+  P3 --> P4["PASSO 4 · log do resultado"]:::pipe
+
+  P4 --> D1{"achou tabelas?"}:::pipe
+  D1 -- não --> EN["NoTablesDetectedError"]:::exc
+  D1 -- sim --> P5["PASSO 5 · render_tables()"]:::pipe
+  P5 -. usa .-> RN["render_overview_with_rects()<br/>ezdxf Frontend + Matplotlib → PNG"]:::render
+  P5 --> D2{"gerou PNG?"}:::pipe
+  D2 -- não --> ER["NoRenderableTablesError"]:::exc
+  D2 -- sim --> Z1["PASSO 6 · _empacotar_zip()<br/>PNGs + manifest.json"]:::router
+
+  Z1 --> OK([" 200 · tabelas.zip "]):::io
+  EQ --> INFO
+  EN --> INFO
+  ER --> INFO
+  INFO([" 200 informativo (JSON)<br/>qualidade + motivo · tabelas: [] "]):::exc
+
+  classDef io fill:#dbe4ee,stroke:#24405f,color:#12233a;
+  classDef router fill:#cfe0f5,stroke:#2f6db5,color:#0f2740;
+  classDef api fill:#f6e6c8,stroke:#b7791f,color:#3a2c07;
+  classDef conv fill:#cdebe6,stroke:#2c9c8a,color:#093a33;
+  classDef pipe fill:#d9dcf5,stroke:#5b62c9,color:#1c1f52;
+  classDef geom fill:#d5ecd0,stroke:#3f9142,color:#123a12;
+  classDef render fill:#e6d9f2,stroke:#8a54c9,color:#2e1550;
+  classDef exc fill:#f3d7d7,stroke:#c0574f,color:#4a1512;
+</pre>
+    </div>
+  </div>
+
+  <section>
+    <h2>Legenda · arquivo → papel</h2>
+    <div class="grid">
+      <div class="card"><div class="top"><span class="sw" style="background:#cfe0f5;border-color:#2f6db5"></span><h3>router.py</h3></div>
+        <p><b>Camada HTTP.</b> Recebe o upload, orquestra os passos e empacota o ZIP final (<code>_empacotar_zip</code>) ou o 200 informativo.</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#f6e6c8;border-color:#b7791f"></span><h3>api.py</h3></div>
+        <p><b>Utilitários compartilhados.</b> Carrega o arquivo, mede qualidade e altura de texto, e pontua keywords PSCIP (<code>_text_score</code>).</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#cdebe6;border-color:#2c9c8a"></span><h3>converter.py</h3></div>
+        <p><b>DWG → DXF.</b> Só entra quando o upload é <code>.dwg</code>; chama o ODA File Converter e devolve um DXF temporário.</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#d9dcf5;border-color:#5b62c9"></span><h3>pipeline.py</h3></div>
+        <p><b>Cérebro.</b> <code>run_pipeline</code> executa os PASSOS 1–4 (qualidade → escala → detecção → log) e o PASSO 5 (<code>render_tables</code>).</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#d5ecd0;border-color:#3f9142"></span><h3>geometry.py</h3></div>
+        <p><b>Geometria bruta.</b> Rasteriza segmentos + textos num grid de ocupação e acha os componentes conexos que viram os retângulos das tabelas.</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#e6d9f2;border-color:#8a54c9"></span><h3>dxf_render.py</h3></div>
+        <p><b>Análise + render.</b> Caracteriza o DXF (<code>analyze_dxf</code>) e renderiza cada tabela em PNG legível via ezdxf + Matplotlib.</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#f3d7d7;border-color:#c0574f"></span><h3>exceptions.py</h3></div>
+        <p><b>Saídas honestas.</b> Qualidade baixa / sem tabela / nada renderizável viram um <code>200</code> informativo — nunca um erro silencioso.</p></div>
+      <div class="card"><div class="top"><span class="sw" style="background:#dbe4ee;border-color:#24405f"></span><h3>entrada / saída</h3></div>
+        <p><b>Contrato do endpoint.</b> Entra um DWG/DXF; sai um ZIP (<code>tabelas.zip</code>) ou um JSON explicando por que não houve ZIP.</p></div>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const pre = document.querySelector('pre.mermaid');
+  if (pre) pre.textContent = pre.textContent.trim();
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  });
+</script>
+</body>
+</html>
