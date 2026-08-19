@@ -172,18 +172,14 @@ def detect_tables(
         labels = find_components(occ, gap_cells=gap_cells)
 
         # Para cada keyword do grupo, descobre o componente (tabela) dela
-        group_labels: dict[int, list] = {}
-        for tb, sc in group:
+        group_labels: set[int] = set()
+        for tb, _ in group:
             r, c = occ.world_to_cell(tb.cx, tb.cy)
             H, W = occ.shape
-            lbl = 0
-            if 0 <= r < H and 0 <= c < W:
-                lbl = int(labels[r, c])
-            if lbl == 0:
-                continue
-            group_labels.setdefault(lbl, []).append((tb, sc))
+            if 0 <= r < H and 0 <= c < W and labels[r, c] != 0:
+                group_labels.add(int(labels[r, c]))
 
-        for lbl, kw_items in group_labels.items():
+        for lbl in group_labels:
             bbox = component_bbox(occ, labels, lbl, use_original=True)
             if bbox is None:
                 continue
