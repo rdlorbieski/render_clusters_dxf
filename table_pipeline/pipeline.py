@@ -13,14 +13,19 @@ Reusa funções de api.py e dxf_render.py via import tardio (dentro das
 funções) para evitar import circular — o router deste módulo é incluído
 no app de api.py.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 
 from .geometry import (
-    collect_segments, collect_text_boxes, TextBox,
-    build_occupancy, find_components, component_bbox,
+    collect_segments,
+    collect_text_boxes,
+    TextBox,
+    build_occupancy,
+    find_components,
+    component_bbox,
 )
 from .exceptions import LowQualityDXFError
 
@@ -35,12 +40,13 @@ _log = logging.getLogger("table_pipeline")
 @dataclass
 class Table:
     """Uma tabela detectada."""
-    bbox: tuple[float, float, float, float]   # (xmin,ymin,xmax,ymax)
+
+    bbox: tuple[float, float, float, float]  # (xmin,ymin,xmax,ymax)
     score: float
     keyword_count: int
     text_count: int
     keywords: list[str] = field(default_factory=list)
-    text_height: float = 0.0   # altura do texto de corpo DESTA tabela (p/ DPI)
+    text_height: float = 0.0  # altura do texto de corpo DESTA tabela (p/ DPI)
 
     @property
     def width(self) -> float:
@@ -58,6 +64,7 @@ class PipelineResult:
     Qualidade baixa não produz um PipelineResult — lança LowQualityDXFError.
     `tables` pode vir vazia se nenhuma região tiver keywords PSCIP.
     """
+
     qualidade: str
     motivo: str
     tables: list[Table] = field(default_factory=list)
@@ -79,10 +86,11 @@ _MIN_KEYWORDS_PER_TABLE = 2
 def _seed_keywords(text_boxes: list[TextBox]) -> list[tuple[TextBox, float]]:
     """Retorna (TextBox, score) das caixas que contêm keyword PSCIP."""
     from api import _text_score
+
     seeds = []
     for tb in text_boxes:
         s = _text_score(tb.text)
-        if s > 1.0:           # > 1 significa que bateu alguma keyword
+        if s > 1.0:  # > 1 significa que bateu alguma keyword
             seeds.append((tb, s))
     return seeds
 
@@ -98,14 +106,15 @@ def _group_seeds(seeds, eps: float):
     try:
         from sklearn.cluster import DBSCAN
         import numpy as np
+
         coords = np.array([(tb.cx, tb.cy) for tb, _ in seeds])
         labels = DBSCAN(eps=eps, min_samples=1).fit_predict(coords)
         groups: dict[int, list] = {}
-        for (item, lbl) in zip(seeds, labels):
+        for item, lbl in zip(seeds, labels):
             groups.setdefault(int(lbl), []).append(item)
         return list(groups.values())
     except ImportError:
-        return [seeds]   # tudo num grupo só
+        return [seeds]  # tudo num grupo só
 
 
 def detect_tables(
@@ -152,8 +161,12 @@ def detect_tables(
         # ROI = bbox das keywords do grupo + margem generosa (cabe a tabela)
         gx = [tb.cx for tb, _ in group]
         gy = [tb.cy for tb, _ in group]
-        region = (min(gx) - roi_margin, min(gy) - roi_margin,
-                  max(gx) + roi_margin, max(gy) + roi_margin)
+        region = (
+            min(gx) - roi_margin,
+            min(gy) - roi_margin,
+            max(gx) + roi_margin,
+            max(gy) + roi_margin,
+        )
 
         occ = build_occupancy(segments, text_boxes, region, cell)
         labels = find_components(occ, gap_cells=gap_cells)
@@ -211,6 +224,39 @@ def _iou(a, b) -> float:
     return inter / (area_a + area_b - inter)
 
 
+def _select_diverse(tables: list[Table], n: int) -> list[Table]:
+    """Escolhe até `n` tabelas priorizando cobertura de keywords, não só score.
+
+    Pegar sempre as `n` de maior score deixa passar o caso em que várias das
+    melhores são a MESMA legenda repetida em pranchas diferentes (mesmas
+    keywords, bboxes bem distantes — o IoU de `_is_duplicate` não pega isso).
+    Aí sobram vagas ocupadas por 4 cópias da mesma tabela e nenhuma para as
+    que cobrem keywords que só aparecem nelas.
+
+    Em vez de ordenar e cortar, escolhe a cada passo quem adiciona mais
+    keywords NOVAS (ainda não cobertas pelas já escolhidas) — empate vai
+    pro maior score, já que `tables` chega ordenada por score desc. Para
+    quando ninguém mais acrescenta nenhuma keyword nova, mesmo com vagas
+    sobrando em `n`: uma 6ª tabela que só repete o que as outras 5 já
+    cobrem não ajuda o passo 3 a ler nada de novo.
+    """
+    selected: list[Table] = []
+    covered: set[str] = set()
+    remaining = list(tables)
+    while remaining and len(selected) < n:
+        best, best_new = None, 0
+        for t in remaining:
+            new_count = len(set(t.keywords) - covered)
+            if new_count > best_new:
+                best, best_new = t, new_count
+        if best is None:
+            break
+        selected.append(best)
+        covered |= set(best.keywords)
+        remaining.remove(best)
+    return selected
+
+
 def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
     """Soma o score de keywords de todos os textos dentro do bbox.
 
@@ -220,6 +266,7 @@ def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
     """
     from api import _text_score
     from dxf_render import clean_mtext_preview
+
     x0, y0, x1, y1 = bbox
     total = 0.0
     kw = 0
@@ -244,8 +291,14 @@ def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
     else:
         body_h = 0.0
 
-    return Table(bbox=bbox, score=total, keyword_count=kw,
-                 text_count=n, keywords=kw_texts[:8], text_height=body_h)
+    return Table(
+        bbox=bbox,
+        score=total,
+        keyword_count=kw,
+        text_count=n,
+        keywords=kw_texts,
+        text_height=body_h,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -257,6 +310,7 @@ def _avaliar_qualidade(doc, msp) -> tuple[str, str]:
     """Classifica o DXF em alta/media/baixa. Retorna (qualidade, motivo)."""
     from api import _detect_quality, _text_height_spread
     from dxf_render import analyze_dxf, collect_text_positions
+
     info = analyze_dxf(doc)
     positions = collect_text_positions(msp, layer=None)
     spread = _text_height_spread(msp)
@@ -271,6 +325,7 @@ def _avaliar_qualidade(doc, msp) -> tuple[str, str]:
 def _medir_escala_texto(msp) -> float:
     """Altura típica do texto de corpo (unidades DXF). Nunca zero."""
     from api import _text_height_dxf
+
     return _text_height_dxf(msp) or 1.0
 
 
@@ -279,20 +334,35 @@ def _medir_escala_texto(msp) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables, n):
+def _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables):
     """Loga qualidade, parâmetros do grid e as tabelas detectadas."""
     _log.warning("─" * 70)
     _log.warning("[table_pipeline] QUALIDADE=%s", qualidade.upper())
     _log.warning("[table_pipeline] motivo: %s", motivo)
-    _log.warning("[table_pipeline] text_height=%.2f cell=%.2f gap_cells=%d tabelas=%d",
-                 text_height, cell, gap_cells, len(tables))
-    for i, t in enumerate(tables[:n], 1):
+    _log.warning(
+        "[table_pipeline] text_height=%.2f cell=%.2f gap_cells=%d tabelas=%d",
+        text_height,
+        cell,
+        gap_cells,
+        len(tables),
+    )
+    for i, t in enumerate(tables, 1):
         _log.warning(
             "  tabela %d: score=%.0f kw=%d textos=%d txt_h=%.2f "
             "bbox=(%.0f,%.0f)-(%.0f,%.0f) %.0fx%.0f  kws=%s",
-            i, t.score, t.keyword_count, t.text_count, t.text_height,
-            t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3],
-            t.width, t.height, ", ".join(t.keywords[:4]))
+            i,
+            t.score,
+            t.keyword_count,
+            t.text_count,
+            t.text_height,
+            t.bbox[0],
+            t.bbox[1],
+            t.bbox[2],
+            t.bbox[3],
+            t.width,
+            t.height,
+            ", ".join(t.keywords[:4]),
+        )
     _log.warning("─" * 70)
 
 
@@ -335,17 +405,26 @@ def run_pipeline(
 
     # ═══ PASSO 3 — Detectar tabelas (grade conectada + score por keywords) ═══
     tables, cell, gap_cells = detect_tables(
-        msp, text_height,
-        cell_factor=cell_factor, gap_factor=gap_factor,
-        roi_margin_factor=roi_margin_factor, group_factor=group_factor)
+        msp,
+        text_height,
+        cell_factor=cell_factor,
+        gap_factor=gap_factor,
+        roi_margin_factor=roi_margin_factor,
+        group_factor=group_factor,
+    )
+    tables = _select_diverse(tables, n)
 
     # ═══ PASSO 4 — Registrar no log ═══
-    _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables, n)
+    _log_resultado(qualidade, motivo, text_height, cell, gap_cells, tables)
 
     return PipelineResult(
-        qualidade=qualidade, motivo=motivo,
-        tables=tables[:n], text_height=text_height,
-        cell=cell, gap_cells=gap_cells)
+        qualidade=qualidade,
+        motivo=motivo,
+        tables=tables,
+        text_height=text_height,
+        cell=cell,
+        gap_cells=gap_cells,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +480,7 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
     # Fundos preenchidos (HATCH/WIPEOUT) já são excluídos no render, então não
     # há risco de "preto sobre preto".
     color_policy = ColorPolicy.BLACK
-    pad = result.cell * 1.5   # folga p/ a linha externa aparecer inteira
+    pad = result.cell * 1.5  # folga p/ a linha externa aparecer inteira
 
     out: list[dict] = []
     for i, t in enumerate(result.tables, 1):
@@ -409,8 +488,8 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
         region = (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
         side_ref = max(t.width, t.height, result.cell)
         config = build_config(
-            color_policy=color_policy,
-            min_lineweight=suggest_lineweight(side_ref, 200))
+            color_policy=color_policy, min_lineweight=suggest_lineweight(side_ref, 200)
+        )
 
         # DPI dinâmico por tabela (altura do texto desta tabela)
         local_h = t.text_height if t.text_height > 0 else result.text_height
@@ -419,9 +498,16 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
         png_path = tempfile.mktemp(suffix=".png")
         try:
             ok = render_overview_with_rects(
-                doc, rects=[], output_path=png_path, region=region,
-                dpi=dpi, max_px=MAX_OUTPUT_PX, config=config,
-                bbox_cache=bbox_cache, verbose=False)
+                doc,
+                rects=[],
+                output_path=png_path,
+                region=region,
+                dpi=dpi,
+                max_px=MAX_OUTPUT_PX,
+                config=config,
+                bbox_cache=bbox_cache,
+                verbose=False,
+            )
             if not ok:
                 continue
             with open(png_path, "rb") as f:
@@ -434,15 +520,17 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
                 pass
 
         name = f"tabela_{i:02d}_score{t.score:.0f}_kw{t.keyword_count}.png"
-        out.append({
-            "name": name,
-            "png": png,
-            "score": t.score,
-            "keyword_count": t.keyword_count,
-            "text_count": t.text_count,
-            "text_height": local_h,
-            "dpi": dpi,
-            "bbox": t.bbox,
-            "keywords": t.keywords,
-        })
+        out.append(
+            {
+                "name": name,
+                "png": png,
+                "score": t.score,
+                "keyword_count": t.keyword_count,
+                "text_count": t.text_count,
+                "text_height": local_h,
+                "dpi": dpi,
+                "bbox": t.bbox,
+                "keywords": t.keywords,
+            }
+        )
     return out
