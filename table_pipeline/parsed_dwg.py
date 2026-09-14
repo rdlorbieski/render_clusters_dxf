@@ -16,7 +16,10 @@ import tempfile
 from dataclasses import dataclass, field
 
 from .geometry import collect_segments, collect_text_boxes, TextBox
-from .pipeline import avaliar_qualidade, medir_escala_texto
+# Os nomes públicos não existem em pipeline.py (só os privados): importar como
+# estava derrubava o serviço na subida com ImportError.
+from .pipeline import _avaliar_qualidade as avaliar_qualidade
+from .pipeline import _medir_escala_texto as medir_escala_texto
 from .exceptions import LowQualityDXFError
 
 _log = logging.getLogger("table_pipeline")
@@ -32,12 +35,35 @@ def dxf_path_for_job(job_id: str) -> str:
     return os.path.join(tempfile.gettempdir(), f"{_DXF_PREFIX}{job_id}.dxf")
 
 
-def cleanup_job(job_id: str) -> None:
-    """Remove o ParsedDWG e o DXF bruto associados a um job_id.
+# Job sem render-final (o consumidor desistiu no meio) deixaria DXF e parse no
+# /tmp para sempre; com plantas de 100 MB isso enche o disco em dias. A varredura
+# roda a cada parse novo e apaga o que passou da idade.
+JOB_TTL_SEGUNDOS = int(os.environ.get("JOB_TTL_SEGUNDOS", 6 * 3600))
 
-    Limitação conhecida: se ninguém chamar /tables/render-final (o
-    consumidor desiste no meio do caminho), esses dois arquivos ficam
-    órfãos no /tmp. Política de expiração fica pro backlog."""
+
+def cleanup_jobs_antigos(agora: float | None = None) -> int:
+    """Apaga arquivos de job mais velhos que JOB_TTL_SEGUNDOS. Devolve quantos."""
+    import time
+
+    agora = agora or time.time()
+    removidos = 0
+    for nome in os.listdir(tempfile.gettempdir()):
+        if not nome.startswith((_TEMP_PREFIX, _DXF_PREFIX)):
+            continue
+        path = os.path.join(tempfile.gettempdir(), nome)
+        try:
+            if agora - os.path.getmtime(path) > JOB_TTL_SEGUNDOS:
+                os.remove(path)
+                removidos += 1
+        except OSError:
+            continue
+    if removidos:
+        _log.info("cleanup_jobs_antigos: %d arquivo(s) de job removido(s)", removidos)
+    return removidos
+
+
+def cleanup_job(job_id: str) -> None:
+    """Remove o ParsedDWG e o DXF bruto associados a um job_id."""
     for path in (
         os.path.join(tempfile.gettempdir(), f"{_TEMP_PREFIX}{job_id}.json"),
         dxf_path_for_job(job_id),

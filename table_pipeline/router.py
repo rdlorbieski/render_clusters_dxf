@@ -30,6 +30,7 @@ from .parsed_dwg import (
     load_parsed_dwg,
     dxf_path_for_job,
     cleanup_job,
+    cleanup_jobs_antigos,
 )
 from .regra import detect_tables_regra, aggregate_and_render
 from .exceptions import (
@@ -434,6 +435,7 @@ async def parse_endpoint(
     """
     from api import _load_dxf_to_tmp, _cleanup
 
+    cleanup_jobs_antigos()
     tmp_path = _load_dxf_to_tmp(file)
     job_id = uuid.uuid4().hex
     dxf_path = dxf_path_for_job(job_id)
