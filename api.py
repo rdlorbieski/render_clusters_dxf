@@ -9,6 +9,7 @@ import io
 import os
 import re
 import tempfile
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -91,7 +92,7 @@ def _cleanup(*paths: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-_PURE_NUMBER_RE    = re.compile(r"^[-+]?\d+([.,]\d+)?$")
+_PURE_NUMBER_RE = re.compile(r"^[-+]?\d+([.,]\d+)?$")
 # Detecta texto com letra-espaçada: ≥60% dos tokens são 1 caractere.
 # Ex: "S I N A L I Z A Ç Ã O" → "SINALIZAÇÃO"
 _SPACED_TEXT_RATIO = 0.60
@@ -114,9 +115,10 @@ def _normalize_spaced(text: str) -> str:
     if ratio < _SPACED_TEXT_RATIO:
         return text
     # Duplo espaço = limite de palavra; espaço simples = espaçamento de letra
-    normalized = re.sub(r" {2,}", "\x00", text)   # marca limites de palavra
-    normalized = normalized.replace(" ", "")        # colapsa espaçamento de letra
+    normalized = re.sub(r" {2,}", "\x00", text)  # marca limites de palavra
+    normalized = normalized.replace(" ", "")  # colapsa espaçamento de letra
     return normalized.replace("\x00", " ").strip()  # restaura palavras
+
 
 # Perfis de "qualidade" do DXF — ajustam side, margem e DPI alvo.
 # - "alta":  DXF bem-organizado, escala normal.
@@ -127,7 +129,7 @@ def _normalize_spaced(text: str) -> str:
 # Margens altas o suficiente para cobrir blocos gráficos (INSERT de símbolos,
 # sinalizações) que ficam fora do bbox dos pontos de inserção de texto.
 _QUALITY_PARAMS: dict[str, tuple[float, float, int]] = {
-    "alta":  (0.8, 0.55, 4000),
+    "alta": (0.8, 0.55, 4000),
     "media": (1.0, 0.60, 4500),
     "baixa": (2.0, 0.75, 6000),
 }
@@ -254,29 +256,50 @@ def _detect_quality(
         "e legendas foram corretamente identificados."
     )
 
+
 # Palavras/expressões que indicam um cluster valioso (carimbo de RT,
 # quadro informativo, listas de medidas preventivas, classificação de
 # ocupação). Comparação é case-insensitive contra texto já limpo dos
 # códigos MTEXT.
 _KEYWORDS_HIGH_VALUE = [
-    "RESPONSÁVEL TÉCNICO", "RESP. TÉCNICO", "RESP TECNICO",
-    "RESPONSAVEL TECNICO", "CREA", "ÁREA", "1:100",
-    "SAÍDAS DE EMERGÊNCIA", "SAIDAS DE EMERGENCIA",
+    "RESPONSÁVEL TÉCNICO",
+    "RESP. TÉCNICO",
+    "RESP TECNICO",
+    "RESPONSAVEL TECNICO",
+    "CREA",
+    "ÁREA",
+    "1:100",
+    "SAÍDAS DE EMERGÊNCIA",
+    "SAIDAS DE EMERGENCIA",
     "EXTINTOR",
-    "ILUMINAÇÃO DE EMERGÊNCIA", "ILUMINACAO DE EMERGENCIA",
-    "SINALIZAÇÃO DE EMERGÊNCIA", "SINALIZACAO DE EMERGENCIA",
+    "ILUMINAÇÃO DE EMERGÊNCIA",
+    "ILUMINACAO DE EMERGENCIA",
+    "SINALIZAÇÃO DE EMERGÊNCIA",
+    "SINALIZACAO DE EMERGENCIA",
     "ACESSO DE VIATURA",
     "CONTROLE DE MATERIAIS",
-    "SUBESTAÇÃO DE ENERGIA", "SUBESTACAO DE ENERGIA",
+    "SUBESTAÇÃO DE ENERGIA",
+    "SUBESTACAO DE ENERGIA",
     # Cabeçalhos de tabela (ancoram o detector exatamente nos quadros)
-    "QUADRO RESUMO", "MEDIDAS DE SEGURANÇA", "MEDIDAS DE SEGURANCA",
-    "CARGA DE INCÊNDIO", "CARGA DE INCENDIO",
-    "CLASSIFICAÇÃO", "CLASSIFICACAO",
-    "OCUPAÇÃO", "OCUPACAO", "DIVISÃO", "DIVISAO", "GRUPO",
-    "SEGURANÇA ESTRUTURAL", "SEGURANCA ESTRUTURAL",
-    "POPULAÇÃO", "POPULACAO",
-    "EDIFICAÇÃO", "EDIFICACAO",
-    "CONFORME NORMA",   # aparece em ~toda linha do QUADRO RESUMO
+    "QUADRO RESUMO",
+    "MEDIDAS DE SEGURANÇA",
+    "MEDIDAS DE SEGURANCA",
+    "CARGA DE INCÊNDIO",
+    "CARGA DE INCENDIO",
+    "CLASSIFICAÇÃO",
+    "CLASSIFICACAO",
+    "OCUPAÇÃO",
+    "OCUPACAO",
+    "DIVISÃO",
+    "DIVISAO",
+    "GRUPO",
+    "SEGURANÇA ESTRUTURAL",
+    "SEGURANCA ESTRUTURAL",
+    "POPULAÇÃO",
+    "POPULACAO",
+    "EDIFICAÇÃO",
+    "EDIFICACAO",
+    "CONFORME NORMA",  # aparece em ~toda linha do QUADRO RESUMO
 ]
 # RT como token isolado (não confunde com palavras tipo "PARTE")
 _RT_RE = re.compile(r"\bRT\b")
@@ -286,36 +309,75 @@ _OCC_CLASS_RE = re.compile(r"\b[A-Z]-\d\b")
 _NT_RE = re.compile(r"\bNT[\s\-]?\d")
 
 
-def _text_score(text: str) -> float:
+def _strip_accents(s: str) -> str:
+    """Remove acentos/diacríticos (Ç→C, Ã→A, Ê→E...).
+
+    Achado testando contra DXF real: vocabulário por sistema (Hyego) veio
+    sem acento ("SINALIZACAO"), texto real do desenho vem acentuado
+    ("SINALIZAÇÃO DE EMERGÊNCIA") — sem isso, a keyword nunca batia,
+    silenciosamente (score ficava em 1.0, sem indicar erro nenhum).
+    `_KEYWORDS_HIGH_VALUE` contorna isso hoje listando as duas grafias
+    pra cada termo; strip aqui resolve pra qualquer lista, sem depender
+    de quem escreveu a keyword lembrar de duplicar.
+    """
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+
+def _text_score(
+    text: str,
+    keywords: list[str] = _KEYWORDS_HIGH_VALUE,
+    *,
+    include_generic_bonuses: bool = True,
+) -> float:
     """
     Pontua um texto pela presença de keywords valiosas.
     Base = 1.0 (qualquer texto não-vazio).
-    +10 por cada keyword. +5 por padrão LETRA-DÍGITO. +10 por 'RT' isolado.
+    +30 por cada keyword. +30 por 'RT' isolado. +10 por padrão LETRA-DÍGITO.
+    +15 por referência a Norma Técnica.
+
+    `keywords` default é a lista genérica (fluxo atual, endpoints
+    existentes). Detecção por regra/sistema passa a lista específica
+    daquela regra e `include_generic_bonuses=False` — RT/classificação/NT
+    indicam "tabela relevante" no geral, não "é dessa regra específica".
+
+    Comparação é insensível a acento (ver _strip_accents).
     """
     from dxf_render import clean_mtext_preview
+
     if not text:
         return 0.0
     cleaned = clean_mtext_preview(text, max_len=200).upper()
     # Normaliza texto letra-espaçada antes de comparar keywords
     cleaned = _normalize_spaced(cleaned)
+    cleaned = _strip_accents(cleaned)
     if not cleaned:
         return 0.0
     score = 1.0
-    for kw in _KEYWORDS_HIGH_VALUE:
-        if kw in cleaned:
-            score += 30.0   # era 10 — keyword vale muito mais que texto genérico
-    if _RT_RE.search(cleaned):
-        score += 30.0
-    if _OCC_CLASS_RE.search(cleaned):
-        score += 10.0
-    if _NT_RE.search(cleaned):
-        score += 15.0   # referência a Norma Técnica (NT 01/20, NT-14/20…)
+    vistas: set[str] = set()
+    for kw in keywords:
+        kw_norm = _strip_accents(kw)
+        if kw_norm in vistas:
+            continue  # já contada (ex.: lista tem "SAÍDA..." e "SAIDA..." — mesma palavra, 2 grafias)
+        vistas.add(kw_norm)
+        if kw_norm in cleaned:
+            score += 30.0  # era 10 — keyword vale muito mais que texto genérico
+    if include_generic_bonuses:
+        if _RT_RE.search(cleaned):
+            score += 30.0
+        if _OCC_CLASS_RE.search(cleaned):
+            score += 10.0
+        if _NT_RE.search(cleaned):
+            score += 15.0  # referência a Norma Técnica (NT 01/20, NT-14/20…)
     return score
 
 
-def _find_top_clusters_scored(positions, n: int, side: float,
-                               all_positions: list | None = None,
-                               eps_hint: float | None = None):
+def _find_top_clusters_scored(
+    positions,
+    n: int,
+    side: float,
+    all_positions: list | None = None,
+    eps_hint: float | None = None,
+):
     """
     Descobre BLOCOS visuais (tabelas, blocos de notas, quadros) e os
     rankeia por relevância de keywords PSCIP.
@@ -346,6 +408,7 @@ def _find_top_clusters_scored(positions, n: int, side: float,
     try:
         from sklearn.cluster import DBSCAN as _DBSCAN
         import numpy as _np
+
         _has_sklearn = True
     except ImportError:
         _has_sklearn = False
@@ -375,8 +438,7 @@ def _find_top_clusters_scored(positions, n: int, side: float,
             if lbl == -1:
                 continue
             s = _text_score(pos.text)
-            d = db_clusters.setdefault(
-                lbl, {"members": [], "score": 0.0, "kw": 0})
+            d = db_clusters.setdefault(lbl, {"members": [], "score": 0.0, "kw": 0})
             d["members"].append(pos)
             d["score"] += s
             if s > 1.0:
@@ -430,8 +492,11 @@ def _find_top_clusters_nms(positions, n: int, side: float):
             break
         best_score, best_window = 0.0, []
         for tp, _s in remaining:
-            window = [(p, s) for p, s in remaining
-                      if abs(p.x - tp.x) <= half and abs(p.y - tp.y) <= half]
+            window = [
+                (p, s)
+                for p, s in remaining
+                if abs(p.x - tp.x) <= half and abs(p.y - tp.y) <= half
+            ]
             ws = sum(s for _, s in window)
             if ws > best_score:
                 best_score, best_window = ws, window
@@ -439,14 +504,21 @@ def _find_top_clusters_nms(positions, n: int, side: float):
             break
         wx = sum(p.x for p, _ in best_window) / len(best_window)
         wy = sum(p.y for p, _ in best_window) / len(best_window)
-        final = [(p, s) for p, s in remaining
-                 if abs(p.x - wx) <= half and abs(p.y - wy) <= half]
+        final = [
+            (p, s)
+            for p, s in remaining
+            if abs(p.x - wx) <= half and abs(p.y - wy) <= half
+        ]
         members = [p for p, _ in final]
         cx = sum(p.x for p in members) / len(members)
         cy = sum(p.y for p in members) / len(members)
-        out.append((Cluster(cx=cx, cy=cy, side=side, members=members),
-                    sum(s for _, s in final),
-                    sum(1 for _, s in final if s > 1.0)))
+        out.append(
+            (
+                Cluster(cx=cx, cy=cy, side=side, members=members),
+                sum(s for _, s in final),
+                sum(1 for _, s in final if s > 1.0),
+            )
+        )
         used = {(p.x, p.y) for p, _ in final}
         remaining = [(p, s) for p, s in remaining if (p.x, p.y) not in used]
     return out
@@ -461,6 +533,7 @@ def _filter_meaningful(positions: list) -> list:
     (fallback para DXFs onde quase todos os textos são números).
     """
     from dxf_render import clean_mtext_preview
+
     out = []
     for tp in positions:
         cleaned = clean_mtext_preview(tp.text, max_len=100).strip()
@@ -489,14 +562,16 @@ def _density_side(positions: list, k: int = 15, factor: float = 2.0) -> float:
         return 100.0
 
     import random
+
     random.seed(42)
     sample = random.sample(positions, min(200, n))
     k_eff = min(k, n - 1)
 
     knn = []
     for p in sample:
-        dists_sq = [(p.x - q.x) ** 2 + (p.y - q.y) ** 2
-                    for q in positions if q is not p]
+        dists_sq = [
+            (p.x - q.x) ** 2 + (p.y - q.y) ** 2 for q in positions if q is not p
+        ]
         if len(dists_sq) >= k_eff:
             dists_sq.sort()
             knn.append(dists_sq[k_eff - 1] ** 0.5)
@@ -659,15 +734,15 @@ def _legible_side(msp, target_px: int, margin: float) -> float | None:
     return render_window / (1 + 2.0 * margin)
 
 
-_CUT_BORDER_PX  = 6    # faixa de pixels da borda a inspecionar
-_CUT_THRESHOLD  = 240  # pixel com canal mínimo < 240 é "conteúdo"
-_CUT_EXPAND     = 1.5  # fator de expansão da margem a cada retry
-_CUT_MAX_RETRY  = 2    # no máximo 2 tentativas extras após a primeira
+_CUT_BORDER_PX = 6  # faixa de pixels da borda a inspecionar
+_CUT_THRESHOLD = 240  # pixel com canal mínimo < 240 é "conteúdo"
+_CUT_EXPAND = 1.5  # fator de expansão da margem a cada retry
+_CUT_MAX_RETRY = 2  # no máximo 2 tentativas extras após a primeira
 # Limite superior: evita imagens gigantes em retries de clusters grandes.
-_MAX_OUTPUT_PX  = 5500
+_MAX_OUTPUT_PX = 5500
 # Limite inferior: garante legibilidade mesmo em clusters fisicamente pequenos.
 # Sem esse floor, um cluster de 130 unidades a 400 DPI gera ~720px — ilegível.
-_MIN_OUTPUT_PX  = 1200
+_MIN_OUTPUT_PX = 1200
 
 
 def _is_cut(png_bytes: bytes) -> tuple[bool, list[str]]:
@@ -690,27 +765,33 @@ def _is_cut(png_bytes: bytes) -> tuple[bool, list[str]]:
     dark = arr.min(axis=2)  # mínimo dos 3 canais; 0=preto, 255=branco
     b = _CUT_BORDER_PX
     lados: list[str] = []
-    if dark[:b,  :].min()  < _CUT_THRESHOLD: lados.append("topo")
-    if dark[-b:, :].min()  < _CUT_THRESHOLD: lados.append("base")
-    if dark[:, :b].min()   < _CUT_THRESHOLD: lados.append("esquerda")
-    if dark[:, -b:].min()  < _CUT_THRESHOLD: lados.append("direita")
+    if dark[:b, :].min() < _CUT_THRESHOLD:
+        lados.append("topo")
+    if dark[-b:, :].min() < _CUT_THRESHOLD:
+        lados.append("base")
+    if dark[:, :b].min() < _CUT_THRESHOLD:
+        lados.append("esquerda")
+    if dark[:, -b:].min() < _CUT_THRESHOLD:
+        lados.append("direita")
     return bool(lados), lados
 
 
-def _render_at(doc, cx: float, cy: float, rside: float, config,
-               target_px: int = 4500) -> bytes | None:
+def _render_at(
+    doc, cx: float, cy: float, rside: float, config, target_px: int = 4500
+) -> bytes | None:
     """
     Renderiza em (cx, cy) EXATOS — usado por /render-region.
     Não tenta recentralizar baseado em conteúdo; o ponto é a verdade.
     DPI adaptativo para manter ~target_px de lado.
     """
     dpi_floor = int(_MIN_OUTPUT_PX * 72 / rside)
-    dpi_cap   = int(_MAX_OUTPUT_PX * 72 / rside)
+    dpi_cap = int(_MAX_OUTPUT_PX * 72 / rside)
     dpi = max(dpi_floor, min(int(target_px * 72 / rside), dpi_cap))
     png_path = tempfile.mktemp(suffix=".png")
     try:
-        ok = render_region(doc, cx, cy, rside, png_path,
-                           dpi=dpi, config=config, verbose=False)
+        ok = render_region(
+            doc, cx, cy, rside, png_path, dpi=dpi, config=config, verbose=False
+        )
         if not ok:
             return None
         with open(png_path, "rb") as f:
@@ -719,10 +800,16 @@ def _render_at(doc, cx: float, cy: float, rside: float, config,
         _cleanup(png_path)
 
 
-def _render_cluster(doc, cluster: Cluster, side: float, config,
-                    margin: float = 0.55, target_px: int = 4000,
-                    max_retries: int = _CUT_MAX_RETRY,
-                    bbox_cache: "ezdxf_bbox.Cache | None" = None) -> bytes | None:
+def _render_cluster(
+    doc,
+    cluster: Cluster,
+    side: float,
+    config,
+    margin: float = 0.55,
+    target_px: int = 4000,
+    max_retries: int = _CUT_MAX_RETRY,
+    bbox_cache: "ezdxf_bbox.Cache | None" = None,
+) -> bytes | None:
     """
     Renderiza um cluster usando o bbox dos pontos de inserção + margem.
 
@@ -748,15 +835,23 @@ def _render_cluster(doc, cluster: Cluster, side: float, config,
         )
         # DPI adaptativo: mantém entre _MIN_OUTPUT_PX e _MAX_OUTPUT_PX por lado.
         # Fórmula: px = rside/72 * dpi  →  dpi = px * 72 / rside
-        dpi_ideal = int(target_px    * 72 / rside)
-        dpi_cap   = int(_MAX_OUTPUT_PX * 72 / rside)
+        dpi_ideal = int(target_px * 72 / rside)
+        dpi_cap = int(_MAX_OUTPUT_PX * 72 / rside)
         dpi_floor = int(_MIN_OUTPUT_PX * 72 / rside)
         dpi = max(dpi_floor, min(dpi_ideal, dpi_cap))
         png_path = tempfile.mktemp(suffix=".png")
         try:
-            ok = render_region(doc, rcx, rcy, rside, png_path,
-                               dpi=dpi, config=config, verbose=False,
-                               bbox_cache=bbox_cache)
+            ok = render_region(
+                doc,
+                rcx,
+                rcy,
+                rside,
+                png_path,
+                dpi=dpi,
+                config=config,
+                verbose=False,
+                bbox_cache=bbox_cache,
+            )
             if not ok:
                 return last_png
             with open(png_path, "rb") as f:
@@ -779,16 +874,29 @@ _RENDER_WORKERS = 4  # threads simultâneas por requisição
 
 
 def _render_clusters_parallel(
-    doc, clusters, side: float, config,
-    margin: float, target_px: int, retries: int,
+    doc,
+    clusters,
+    side: float,
+    config,
+    margin: float,
+    target_px: int,
+    retries: int,
 ) -> dict[int, bytes | None]:
     """Renderiza clusters em paralelo. Retorna {idx_1based: png_bytes}."""
+
     def _worker(args):
         idx, cluster = args
         cache = ezdxf_bbox.Cache()  # cache isolado por thread
-        return idx, _render_cluster(doc, cluster, side, config,
-                                    margin=margin, target_px=target_px,
-                                    max_retries=retries, bbox_cache=cache)
+        return idx, _render_cluster(
+            doc,
+            cluster,
+            side,
+            config,
+            margin=margin,
+            target_px=target_px,
+            max_retries=retries,
+            bbox_cache=cache,
+        )
 
     n = min(len(clusters), _RENDER_WORKERS)
     results: dict[int, bytes | None] = {}
@@ -828,14 +936,14 @@ def _collect_csv_matches(msp, tokens: set[str]) -> list:
     pelo menos um token do CSV.
     """
     from dxf_render import TextPos, clean_mtext_preview
+
     matches = []
     for e in msp:
         if e.dxftype() not in ("TEXT", "MTEXT"):
             continue
         try:
             p = e.dxf.insert
-            raw = (e.dxf.text if e.dxftype() == "TEXT"
-                   else getattr(e.dxf, "text", ""))
+            raw = e.dxf.text if e.dxftype() == "TEXT" else getattr(e.dxf, "text", "")
             if not raw or not raw.strip():
                 continue
             cleaned = _normalize_spaced(clean_mtext_preview(raw, max_len=500).upper())
@@ -852,4 +960,5 @@ def _collect_csv_matches(msp, tokens: set[str]) -> list:
 # router fizer import tardio de api.
 # ─────────────────────────────────────────────────────────────────────────────
 from table_pipeline import router as _table_router  # noqa: E402
+
 app.include_router(_table_router)

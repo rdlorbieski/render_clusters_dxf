@@ -83,13 +83,23 @@ class PipelineResult:
 _MIN_KEYWORDS_PER_TABLE = 2
 
 
-def _seed_keywords(text_boxes: list[TextBox]) -> list[tuple[TextBox, float]]:
-    """Retorna (TextBox, score) das caixas que contêm keyword PSCIP."""
+def _seed_keywords(
+    text_boxes: list[TextBox],
+    keywords: list[str] | None = None,
+    *,
+    include_generic_bonuses: bool = True,
+) -> list[tuple[TextBox, float]]:
+    """Retorna (TextBox, score) das caixas que contêm keyword PSCIP.
+
+    `keywords=None` usa a lista padrão de `_text_score` (_KEYWORDS_HIGH_VALUE)."""
     from api import _text_score
 
+    kwargs = {} if keywords is None else {"keywords": keywords}
     seeds = []
     for tb in text_boxes:
-        s = _text_score(tb.text)
+        s = _text_score(
+            tb.text, include_generic_bonuses=include_generic_bonuses, **kwargs
+        )
         if s > 1.0:  # > 1 significa que bateu alguma keyword
             seeds.append((tb, s))
     return seeds
@@ -117,38 +127,39 @@ def _group_seeds(seeds, eps: float):
         return [seeds]  # tudo num grupo só
 
 
-def detect_tables(
-    msp,
+def _detect_tables_core(
+    text_boxes: list[TextBox],
+    segments: list[tuple[float, float, float, float]],
     text_height: float,
+    cell: float,
+    gap_cells: int,
     *,
-    cell_factor: float = 1.0,
-    gap_factor: float = 2.5,
+    keywords: list[str] | None = None,
+    include_generic_bonuses: bool = True,
+    min_keywords: int = _MIN_KEYWORDS_PER_TABLE,
     roi_margin_factor: float = 60.0,
     group_factor: float = 25.0,
-) -> tuple[list[Table], float, int]:
-    """Detecta tabelas via grade conectada ancorada em keywords.
+) -> list[Table]:
+    """Núcleo geométrico compartilhado (grade conectada ancorada em keywords).
 
-    Args:
-        msp: modelspace.
-        text_height: altura típica do texto (unidades DXF) — escala base.
-        cell_factor: tamanho da célula do grid = text_height × cell_factor.
-        gap_factor: gap de dilatação = text_height × gap_factor (fecha vãos
-            internos da tabela; menor evita fundir tabelas vizinhas).
-        roi_margin_factor: margem da ROI ao redor das keywords (× text_height).
-        group_factor: raio p/ agrupar keywords em vizinhanças (× text_height).
+    Não decide `cell`/`gap_cells` nem coleta texto/segmentos — quem chama
+    já traz isso pronto: `detect_tables` (fluxo atual, a partir de `msp`)
+    ou `detect_tables_regra` (fluxo por regra/sistema, a partir de um
+    `ParsedDWG` já parseado — ver `regra.py`).
 
-    Returns:
-        (tables, cell, gap_cells).
+    `min_keywords` default é `_MIN_KEYWORDS_PER_TABLE` (2) — calibrado pra
+    lista genérica de ~37 termos, onde 2 batidas distintas é sinal razoável
+    de tabela real. Com uma lista estreita por sistema (ex.: só "EXTINTOR"
+    e "EXTINTORES"), exigir 2 é bar alto demais: uma tabela real de
+    extintor pode mencionar a palavra uma única vez e descrever o resto em
+    termos técnicos (carga, tipo, capacidade) que não repetem "extintor".
+    `detect_tables_regra` chama com `min_keywords=1` por esse motivo.
     """
-    text_boxes = collect_text_boxes(msp)
-    segments = collect_segments(msp)
-
-    seeds = _seed_keywords(text_boxes)
-    cell = max(text_height * cell_factor, 1e-6)
-    gap_cells = max(int(round(gap_factor / cell_factor)), 1)
-
+    seeds = _seed_keywords(
+        text_boxes, keywords, include_generic_bonuses=include_generic_bonuses
+    )
     if not seeds:
-        return [], cell, gap_cells
+        return []
 
     roi_margin = text_height * roi_margin_factor
     group_eps = text_height * group_factor
@@ -188,13 +199,58 @@ def detect_tables(
             seen_bboxes.append(bbox)
 
             # Pontua a tabela: soma score de TODOS os textos dentro do bbox
-            table = _score_table(bbox, text_boxes)
+            table = _score_table(
+                bbox,
+                text_boxes,
+                keywords,
+                include_generic_bonuses=include_generic_bonuses,
+            )
             # Descarta keyword isolada (provável falso positivo)
-            if table.keyword_count < _MIN_KEYWORDS_PER_TABLE:
+            if table.keyword_count < min_keywords:
                 continue
             tables.append(table)
 
     tables.sort(key=lambda t: t.score, reverse=True)
+    return tables
+
+
+def detect_tables(
+    msp,
+    text_height: float,
+    *,
+    cell_factor: float = 1.0,
+    gap_factor: float = 2.5,
+    roi_margin_factor: float = 60.0,
+    group_factor: float = 25.0,
+) -> tuple[list[Table], float, int]:
+    """Detecta tabelas via grade conectada ancorada em keywords.
+
+    Args:
+        msp: modelspace.
+        text_height: altura típica do texto (unidades DXF) — escala base.
+        cell_factor: tamanho da célula do grid = text_height × cell_factor.
+        gap_factor: gap de dilatação = text_height × gap_factor (fecha vãos
+            internos da tabela; menor evita fundir tabelas vizinhas).
+        roi_margin_factor: margem da ROI ao redor das keywords (× text_height).
+        group_factor: raio p/ agrupar keywords em vizinhanças (× text_height).
+
+    Returns:
+        (tables, cell, gap_cells).
+    """
+    text_boxes = collect_text_boxes(msp)
+    segments = collect_segments(msp)
+    cell = max(text_height * cell_factor, 1e-6)
+    gap_cells = max(int(round(gap_factor / cell_factor)), 1)
+
+    tables = _detect_tables_core(
+        text_boxes,
+        segments,
+        text_height,
+        cell,
+        gap_cells,
+        roi_margin_factor=roi_margin_factor,
+        group_factor=group_factor,
+    )
     return tables, cell, gap_cells
 
 
@@ -253,16 +309,24 @@ def _select_diverse(tables: list[Table], n: int) -> list[Table]:
     return selected
 
 
-def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
+def _score_table(
+    bbox,
+    text_boxes: list[TextBox],
+    keywords: list[str] | None = None,
+    *,
+    include_generic_bonuses: bool = True,
+) -> Table:
     """Soma o score de keywords de todos os textos dentro do bbox.
 
     Também mede a altura do texto de CORPO desta tabela (percentil 25 das
     alturas internas) — usada para calcular o DPI individual no render,
     já que cada tabela tem sua própria escala de fonte.
-    """
+
+    `keywords=None` usa a lista padrão de `_text_score` (_KEYWORDS_HIGH_VALUE)."""
     from api import _text_score
     from dxf_render import clean_mtext_preview
 
+    kwargs = {} if keywords is None else {"keywords": keywords}
     x0, y0, x1, y1 = bbox
     total = 0.0
     kw = 0
@@ -271,7 +335,9 @@ def _score_table(bbox, text_boxes: list[TextBox]) -> Table:
     heights: list[float] = []
     for tb in text_boxes:
         if x0 <= tb.cx <= x1 and y0 <= tb.cy <= y1:
-            s = _text_score(tb.text)
+            s = _text_score(
+                tb.text, include_generic_bonuses=include_generic_bonuses, **kwargs
+            )
             total += s
             n += 1
             if tb.height > 0:
