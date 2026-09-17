@@ -509,6 +509,38 @@ def legible_dpi(text_height: float) -> int:
     return max(int(TARGET_TEXT_PX * 72 / text_height), MIN_DPI)
 
 
+def _regiao_capada(doc, bbox, raio, area_max, max_ent, cache):
+    """Expande `bbox` em `raio` unidades por lado, encolhendo até caber nos tetos.
+
+    Cresce simétrico e para no primeiro teto que morde: área não passa de
+    `area_max` vezes a do bbox, e o nº de entidades da região não passa de
+    `max_ent`. Sem os tetos, uma prancha densa geraria um recorte gigante que
+    infla o custo de IA e o render. Devolve o próprio bbox se nada couber.
+    """
+    from dxf_render import filter_entities_by_bbox
+
+    def area(b):
+        return max(b[2] - b[0], 1) * max(b[3] - b[1], 1)
+
+    def n_ent(b):
+        return len(list(filter_entities_by_bbox(doc.modelspace(), b, cache=cache)))
+
+    a0 = area(bbox)
+    alvo = (bbox[0] - raio, bbox[1] - raio, bbox[2] + raio, bbox[3] + raio)
+    cabe = lambda b: area(b) / a0 <= area_max and n_ent(b) <= max_ent
+    if cabe(alvo):
+        return alvo
+    lo, hi = 0.0, 1.0
+    for _ in range(7):
+        f = (lo + hi) / 2
+        cand = tuple(bbox[i] + f * (alvo[i] - bbox[i]) for i in range(4))
+        if cabe(cand):
+            lo = f
+        else:
+            hi = f
+    return tuple(bbox[i] + lo * (alvo[i] - bbox[i]) for i in range(4))
+
+
 def render_tables(doc, result: PipelineResult) -> list[dict]:
     """Renderiza cada tabela do resultado em alta resolução.
 
@@ -545,9 +577,28 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
     pad = result.cell * 1.5  # folga p/ a linha externa aparecer inteira
 
     out: list[dict] = []
+    # Recorte de REGIÃO (opt-in por VISAO_REGIAO_RAIO_TH > 0). O recorte padrão é o
+    # bbox justo do componente (a tabela de texto), e o detalhe que a norma pede,
+    # um desenho colado ao lado, cai fora. Expandir o recorte para uma região em
+    # volta do componente, capada por área e por nº de entidades, traz o desenho
+    # para dentro. Validado sobre 20 regras/8 projetos com a IA de produção:
+    # "com evidência" 5->11, "aquisição" (imagem incompleta) 10->1. O anchoring no
+    # termo específico do detalhe é feito pelo chamador via keywords; aqui só se
+    # cuida da geometria do recorte. Os tetos evitam inflar a imagem (custo de IA)
+    # e o render (o 2º gargalo de tempo).
+    raio_th = float(os.getenv("VISAO_REGIAO_RAIO_TH", "0") or 0)
+    regiao_area_max = float(os.getenv("VISAO_REGIAO_AREA_MAX", "3.5") or 3.5)
+    regiao_max_ent = int(os.getenv("VISAO_REGIAO_MAX_ENTIDADES", "8000") or 8000)
+
     for i, t in enumerate(result.tables, 1):
         x0, y0, x1, y1 = t.bbox
         region = (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        local_h_regiao = t.text_height if t.text_height > 0 else result.text_height
+        if raio_th > 0 and local_h_regiao > 0:
+            region = _regiao_capada(
+                doc, region, raio_th * local_h_regiao,
+                regiao_area_max, regiao_max_ent, bbox_cache,
+            )
         side_ref = max(t.width, t.height, result.cell)
         config = build_config(
             color_policy=color_policy, min_lineweight=suggest_lineweight(side_ref, 200)
