@@ -509,6 +509,39 @@ def legible_dpi(text_height: float) -> int:
     return max(int(TARGET_TEXT_PX * 72 / text_height), MIN_DPI)
 
 
+def _regiao_capada(doc, bbox, raio, max_ent, cache):
+    """Expande `bbox` em `raio` unidades por lado, encolhendo até caber no teto.
+
+    Cresce simétrico e para quando o nº de entidades da região passa de
+    `max_ent`, que é o que infla o custo de IA e o render numa prancha densa.
+    O raio é ABSOLUTO (em altura de texto), e é isso que limita o tamanho: um
+    componente que é só o título do detalhe vira uma região do mesmo tamanho
+    que um componente-tabela. Não há teto de área relativo ao bbox: esse teto
+    estrangulava justamente o caso que a região existe para resolver (o título
+    é minúsculo, 3,5x a área dele não alcança o desenho ao lado), e o engolir a
+    prancha que ele evitava era efeito de padding PERCENTUAL, não de raio fixo.
+    Devolve o próprio bbox se nada couber.
+    """
+    from dxf_render import filter_entities_by_bbox
+
+    def n_ent(b):
+        return len(list(filter_entities_by_bbox(doc.modelspace(), b, cache=cache)))
+
+    alvo = (bbox[0] - raio, bbox[1] - raio, bbox[2] + raio, bbox[3] + raio)
+    cabe = lambda b: n_ent(b) <= max_ent
+    if cabe(alvo):
+        return alvo
+    lo, hi = 0.0, 1.0
+    for _ in range(7):
+        f = (lo + hi) / 2
+        cand = tuple(bbox[i] + f * (alvo[i] - bbox[i]) for i in range(4))
+        if cabe(cand):
+            lo = f
+        else:
+            hi = f
+    return tuple(bbox[i] + lo * (alvo[i] - bbox[i]) for i in range(4))
+
+
 def render_tables(doc, result: PipelineResult) -> list[dict]:
     """Renderiza cada tabela do resultado em alta resolução.
 
@@ -545,9 +578,28 @@ def render_tables(doc, result: PipelineResult) -> list[dict]:
     pad = result.cell * 1.5  # folga p/ a linha externa aparecer inteira
 
     out: list[dict] = []
+    # Recorte de REGIÃO (opt-in por VISAO_REGIAO_RAIO_TH > 0). O recorte padrão é o
+    # bbox justo do componente (a tabela de texto), e o detalhe que a norma pede,
+    # um desenho colado ao lado, cai fora. Expandir o recorte para uma região em
+    # volta do componente, com raio absoluto em altura de texto e teto de
+    # entidades, traz o desenho para dentro. Medido sobre 20 regras/8 projetos com
+    # a IA de produção, na régua rotulada à mão: o raio 35 ainda cortava o
+    # conteúdo deslocado do título (memorial à direita, desenho acima); o raio 45
+    # recuperou o detalhe inteiro (desenho + cota de altura) e, mais que isso,
+    # deu veredito ESTÁVEL onde o crop cortado fazia a IA oscilar entre runs.
+    # Recomendado ao ligar: 45. O anchoring no termo específico do detalhe é do
+    # chamador via keywords (trem-api, ItemIT03.ancoras); aqui só a geometria.
+    raio_th = float(os.getenv("VISAO_REGIAO_RAIO_TH", "0") or 0)
+    regiao_max_ent = int(os.getenv("VISAO_REGIAO_MAX_ENTIDADES", "8000") or 8000)
+
     for i, t in enumerate(result.tables, 1):
         x0, y0, x1, y1 = t.bbox
         region = (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        local_h_regiao = t.text_height if t.text_height > 0 else result.text_height
+        if raio_th > 0 and local_h_regiao > 0:
+            region = _regiao_capada(
+                doc, region, raio_th * local_h_regiao, regiao_max_ent, bbox_cache,
+            )
         side_ref = max(t.width, t.height, result.cell)
         config = build_config(
             color_policy=color_policy, min_lineweight=suggest_lineweight(side_ref, 200)
